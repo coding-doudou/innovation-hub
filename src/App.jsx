@@ -1,0 +1,2942 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  Bot,
+  CalendarDays,
+  CheckCircle2,
+  ChevronRight,
+  ClipboardCheck,
+  Download,
+  Flag,
+  FolderKanban,
+  LayoutDashboard,
+  LogOut,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings,
+  Upload,
+  User,
+  X,
+} from "lucide-react";
+import { repository } from "./data/repository.js";
+import { isRemoteBackend } from "./config.js";
+import { initAuth, login, logout, getActiveAccount } from "./auth/msalClient.js";
+
+const STORAGE_KEYS = {
+  projects: "iph_projects",
+  decisions: "iph_decisions",
+};
+
+const stages = [
+  "Problem Articulation",
+  "Scouting",
+  "POC",
+  "Deployment Planning",
+  "Deployment Execution",
+  "Measuring Success",
+];
+
+const statuses = ["Green", "Amber", "Red", "Blocked", "Completed"];
+const priorities = ["Low", "Medium", "High", "Strategic"];
+const products = ["Cargo Insurance", "Value Protect", "Customs", "Routing", "Forwarding", "CRM", "AI Literacy", "Network Optimization", "Other"];
+const recommendations = [
+  "Continue Articulation",
+  "Prioritize for Scouting",
+  "Continue Scouting",
+  "Select for PoC",
+  "Iterate PoC",
+  "Graduate to Deployment",
+  "Park",
+  "Kill",
+];
+
+const stageMigrationMap = {
+  Idea: "Problem Articulation",
+  Discovery: "Problem Articulation",
+  Qualification: "Scouting",
+  PoC: "POC",
+  Pilot: "Deployment Planning",
+  Scale: "Deployment Execution",
+  Closed: "Measuring Success",
+};
+
+const recommendationMigrationMap = {
+  "Continue Discovery": "Continue Articulation",
+  "Move to PoC": "Select for PoC",
+  "Move to Pilot": "Graduate to Deployment",
+  Scale: "Graduate to Deployment",
+};
+
+const emptyProject = {
+  name: "",
+  productArea: "AI Literacy",
+  owner: "",
+  dateRequested: "",
+  businessFunction: "",
+  stakeholderName: "",
+  regionScope: "",
+  stage: "Problem Articulation",
+  status: "Green",
+  priority: "Medium",
+  targetDate: "",
+  nextMilestone: "",
+  recommendation: "Continue Articulation",
+  problem: "",
+  impact: "",
+  financialImpact: "",
+  objectivePrimary: "",
+  objectiveSecondary: "",
+  currentChallenges: "",
+  previousSolutions: "",
+  dreamScenario: "",
+  implementationRisks: "",
+  resourcesRequired: "",
+  scalabilityVision: "",
+  curatedVendors: [],
+  selectedVendors: [],
+  demoVendors: [],
+  vendorEvaluations: [],
+  selectedVendor: "",
+  strategicAlignment: "",
+  timeToMarket: "",
+  capabilitiesFit: "",
+  partnerSummary: "",
+  value: "",
+  blockers: "",
+  notes: "",
+  activity: [],
+};
+
+const emptyDecision = {
+  project: "",
+  decision: "",
+  owner: "",
+  due: "",
+  recommendation: "Continue Articulation",
+  finalDecision: "Pending",
+  status: "Open",
+  notes: "",
+};
+
+const sampleProjects = [
+  {
+    id: 1,
+    name: "Warehouse Safety Event Detection",
+    productArea: "Other",
+    owner: "Maurice Simpson",
+    dateRequested: "2025-04-07",
+    businessFunction: "Warehouse Safety / Security",
+    stakeholderName: "Maurice Simpson",
+    regionScope: "USA / NAM",
+    stage: "Problem Articulation",
+    status: "Amber",
+    priority: "Strategic",
+    nextMilestone: "Confirm pilot site and baseline AFR / IFIR data",
+    targetDate: "2026-06-12",
+    recommendation: "Prioritize for Scouting",
+    problem: "Warehouse teams rely heavily on manual reporting to capture incidents, near misses, and safety events. That creates incomplete visibility, slower response, and inconsistent measurement across sites.",
+    impact: "Current reporting makes it difficult to quantify incident frequency accurately, compare facilities on a like-for-like basis, and proactively intervene before events escalate.",
+    financialImpact: "Accident claims are estimated around USD 35k-40k per worker case, while broader event costs are not consistently tracked.",
+    objectivePrimary: "Improve the accuracy and completeness of safety event reporting to reduce incidents, near misses, and accidents across warehouse operations.",
+    objectiveSecondary: "Establish clearer financial visibility into the cost of warehouse safety incidents and near misses.",
+    currentChallenges: "Human-submitted observations and equipment alerts do not provide full coverage. Reporting is reactive and site leaders may miss or misclassify events.",
+    previousSolutions: "No dedicated technology has been implemented yet; AFR / IFIR style reporting exists but remains reactive.",
+    dreamScenario: "Computer vision-based detection with real-time alerts, more reliable event capture, and a stronger basis for prevention and operational follow-up.",
+    implementationRisks: "Need operator and customer buy-in, clean baseline data, and a clear path to quantify ROI across facilities.",
+    resourcesRequired: "External enablement and training for local teams using the solution.",
+    scalabilityVision: "Start in NAM warehouses and extend to additional regions once the model and operating process are proven.",
+    value: "Better event visibility, faster intervention, lower incident frequency, and stronger safety governance.",
+    blockers: "Baseline event quality and financial impact data are still fragmented.",
+    notes: "Derived from the warehouse safety / security discovery form example with regional applicability for NAM and broader rollout potential.",
+  },
+  {
+    id: 2,
+    name: "AI Literacy Mapping for Leadership",
+    productArea: "AI Literacy",
+    owner: "Doudou BA",
+    stage: "Problem Articulation",
+    status: "Green",
+    priority: "Strategic",
+    nextMilestone: "Review process and first prototype",
+    targetDate: "2026-06-10",
+    recommendation: "Prioritize for Scouting",
+    problem: "Leadership teams need a structured view of AI literacy gaps and targeted upskilling needs.",
+    value: "Better AI adoption readiness and targeted upskilling for senior leaders.",
+    blockers: "Need alignment on evaluation dimensions.",
+    notes: "Stakeholders: Yujie Su, Cyber Risk team, business leaders.",
+  },
+  {
+    id: 3,
+    name: "Cargo Insurance Tech Assessment",
+    productArea: "Cargo Insurance",
+    owner: "CRM Innovation Lead",
+    stage: "Scouting",
+    status: "Amber",
+    priority: "High",
+    nextMilestone: "Prioritize top 3 insurance use cases",
+    targetDate: "2026-06-14",
+    recommendation: "Select for PoC",
+    problem: "Cargo insurance teams need clearer visibility on technology opportunities across claims, pricing, and risk assessment.",
+    value: "Potential reduction in claim handling time and improved risk prediction.",
+    blockers: "Data access and ownership.",
+    notes: "Shortlist internal prototype vs vendor-led PoC.",
+  },
+  {
+    id: 4,
+    name: "Network Optimization AI",
+    productArea: "Network Optimization",
+    owner: "OR Team",
+    stage: "POC",
+    status: "Green",
+    priority: "Strategic",
+    nextMilestone: "Benchmark against historical scenario",
+    targetDate: "2026-06-05",
+    recommendation: "Graduate to Deployment",
+    problem: "Operational teams need faster scenario evaluation for routing, cost, service, and capacity trade-offs.",
+    value: "Higher quality decisions in network planning and potential cost reduction.",
+    blockers: "Need clean scenario data and accepted baseline metrics.",
+    notes: "Pilot lane approval needed after benchmark.",
+  },
+  {
+    id: 5,
+    name: "Customs Automation Opportunity",
+    productArea: "Customs",
+    owner: "Customs Product Team",
+    stage: "Problem Articulation",
+    status: "Blocked",
+    priority: "Medium",
+    nextMilestone: "Map top manual customs pain points",
+    targetDate: "2026-06-08",
+    recommendation: "Continue Articulation",
+    problem: "Customs workflows involve repetitive document checks and declaration quality controls.",
+    value: "Reduced manual work and fewer declaration errors.",
+    blockers: "Process varies across markets.",
+    notes: "Need market-specific process owners.",
+  },
+  {
+    id: 6,
+    name: "Customer Facing Conversational AI",
+    productArea: "Customs",
+    owner: "Nicoloe Stojeski",
+    dateRequested: "2025-08-05",
+    businessFunction: "Global Customs Services",
+    stakeholderName: "Nicoloe Stojeski",
+    regionScope: "Global",
+    stage: "Problem Articulation",
+    status: "Amber",
+    priority: "Strategic",
+    targetDate: "2026-06-30",
+    nextMilestone: "Validate churn exposure, define V1 Track scope, and align AI pilot requirements",
+    recommendation: "Prioritize for Scouting",
+    problem: "Major clients, including Living Spaces and Williams Sonoma, have signaled dissatisfaction with outdated customer-facing customs technology. To retain and grow these accounts, the business needs a more modern, AI-powered self-service experience that reduces friction and demonstrates visible product leadership.",
+    impact: "The opportunity is tied to customer churn reduction, stronger self-service experiences, improved market perception of innovation, and higher retention and loyalty across customs services.",
+    financialImpact: "Estimated customer churn prevention opportunity of roughly USD 1M in NAM alone, with broader upside if the solution scales across additional markets and customer segments.",
+    objectivePrimary: "Retain high-value customers by delivering a modern, AI-powered customer experience that builds confidence, showcases innovation, and reduces churn risk.",
+    objectiveSecondary: "Reduce manual query handling through AI-powered self-service, shorten response times, increase customer satisfaction, reinforce Maersk's innovation brand, and create reusable capabilities across customs products.",
+    currentChallenges: "Customer-facing customs products do not meet rising client expectations for speed, clarity, and digital self-service. Existing tools are dated, response handling is manual, and there is no differentiated AI-enabled experience in place.",
+    previousSolutions: "No previous solutions tested.",
+    dreamScenario: "Launch a first-wave AI-powered customs experience inside V1 Track, then extend it into a scalable conversational layer across customs products. The target experience combines strong self-service, customer support assistance, and reusable enterprise AI components.",
+    implementationRisks: "Risk areas include alignment across tech, data, and product teams; access to accurate customs knowledge sources; dependency on vendor or platform choices; compliance and security constraints; and customer trust if the AI experience performs inconsistently.",
+    resourcesRequired: "V1 Track support, a unified data foundation, relevant customs domain content, and NAM solution team support.",
+    scalabilityVision: "Global",
+    curatedVendors: [
+      { cluster: "Business/Productivity Software", number: 1, vendorName: "Decagon", website: "https://decagon.ai/", origin: "United States", foundingYear: "2023", employees: "138", fundingRound: "Series C", description: "Conversational AI platform for customer support cost reduction and faster support workflows.", score: "", reasoning: "Relevance of the solution to the problem presented by the business." },
+      { cluster: "Business/Productivity Software", number: 2, vendorName: "Amazon Bedrock", website: "https://aws.amazon.com/lex/", origin: "United States", foundingYear: "", employees: "", fundingRound: "Established", description: "Internal AI/ML platform option for conversational experiences.", score: "", reasoning: "Built for internal AI/ML teams." },
+      { cluster: "Business/Productivity Software", number: 3, vendorName: "Sligo AI", website: "https://sligo.ai/", origin: "United States", foundingYear: "", employees: "", fundingRound: "", description: "Conversational AI vendor candidate for customer-facing interactions.", score: "", reasoning: "Relative maturity and fit versus other early-stage vendors." },
+      { cluster: "Business/Productivity Software", number: 4, vendorName: "Bizagi", website: "https://www.bizagi.com/en", origin: "United Kingdom", foundingYear: "1989", employees: "449", fundingRound: "2ndary-Private", description: "Business process and workflow automation platform for digitization of enterprise processes.", score: "", reasoning: "Ease of understanding relevant product capability from website and business process fit." },
+      { cluster: "Business/Productivity Software", number: 5, vendorName: "Sendbird", website: "https://sendbird.com/", origin: "United States", foundingYear: "2013", employees: "288", fundingRound: "2ndary-Private", description: "Messaging and chat APIs for digital customer communication.", score: "", reasoning: "Customer interaction capability and support use case relevance." },
+      { cluster: "Automation/Workflow Software", number: 6, vendorName: "Beam.ai", website: "https://beam.ai/", origin: "United States", foundingYear: "2022", employees: "38", fundingRound: "Seed", description: "AI agent platform for repetitive back-office tasks and agentic workflow execution.", score: "", reasoning: "Workflow automation and support relevance." },
+      { cluster: "Automation/Workflow Software", number: 7, vendorName: "Azumo", website: "https://azumo.com/", origin: "United States", foundingYear: "", employees: "101-250", fundingRound: "", description: "Software services company building intelligent applications, big data solutions, and chatbots.", score: "", reasoning: "Services-led route for custom solution build." },
+      { cluster: "IT Consulting and Outsourcing", number: 8, vendorName: "Hatchworks", website: "https://hatchworks.com/", origin: "United States", foundingYear: "2016", employees: "90", fundingRound: "Seed", description: "Enterprise software and cloud application builder with product strategy and AI delivery capability.", score: "", reasoning: "Custom build and redesign support." },
+      { cluster: "Automation/Workflow Solutions", number: 9, vendorName: "Tungsten Automation", website: "https://www.tungstenautomation.com/", origin: "United States", foundingYear: "1985", employees: "2100", fundingRound: "PE Growth", description: "Automation platform for information-intensive business processes and customer engagement.", score: "", reasoning: "Enterprise automation breadth." },
+      { cluster: "Business/Productivity Software", number: 10, vendorName: "Copilot Studio", website: "https://learn.microsoft.com/en-us/microsoft-copilot-studio/", origin: "United States", foundingYear: "1975", employees: "228000", fundingRound: "Established", description: "Internal AI/ML platform option for conversational solutions.", score: "", reasoning: "Built for internal AI/ML teams." },
+      { cluster: "Business/Productivity Software", number: 11, vendorName: "Pedestal AI", website: "https://www.pedestal.ai/", origin: "United States", foundingYear: "", employees: "", fundingRound: "", description: "Conversational AI vendor evaluated for customer-facing customs use cases.", score: "", reasoning: "Direct fit to conversational customs experience objective." },
+      { cluster: "Business/Productivity Software", number: 12, vendorName: "IBM Watsonx", website: "https://www.ibm.com/products/watsonx-ai", origin: "United States", foundingYear: "", employees: "", fundingRound: "Established", description: "Foundation and enterprise AI platform option.", score: "", reasoning: "Built for internal AI/ML teams." },
+      { cluster: "Business/Productivity Software", number: 13, vendorName: "Cohere", website: "https://cohere.com/north", origin: "Canada", foundingYear: "2019", employees: "400", fundingRound: "Later Stage VC", description: "Foundation model provider for enterprise NLP and language workflows.", score: "", reasoning: "Foundation model provider." },
+      { cluster: "Business/Productivity Software", number: 14, vendorName: "Sana", website: "https://sanalabs.com/", origin: "Sweden", foundingYear: "2016", employees: "250", fundingRound: "Series C", description: "Knowledge assistant and AI learning platform with search, chat, and automation capabilities.", score: "", reasoning: "Knowledge assistant relevance." },
+      { cluster: "Business/Productivity Software", number: 15, vendorName: "Kore.ai", website: "https://kore.ai/", origin: "United States", foundingYear: "2013", employees: "1000", fundingRound: "Series D", description: "Enterprise conversational AI platform for customer and employee interactions.", score: "", reasoning: "Strong customer-facing conversational interface capability." },
+      { cluster: "Business/Productivity Software", number: 16, vendorName: "Ada", website: "https://www.ada.cx/", origin: "Canada", foundingYear: "2016", employees: "459", fundingRound: "Series C", description: "Chatbot platform for personalized support experiences at scale.", score: "", reasoning: "Customer support automation relevance." },
+      { cluster: "Business/Productivity Software", number: 17, vendorName: "Pando AI", website: "https://pando.ai/", origin: "United States", foundingYear: "2015", employees: "272", fundingRound: "Series B", description: "AI-powered freight automation and supply chain execution platform.", score: "", reasoning: "Logistics-specific relevance." },
+    ],
+    selectedVendors: [
+      { number: 1, vendorName: "Beam.ai", contactEmail: "quentin.silvestro@beam.ai", contactName: "Quentin Silvestro", role: "GTM Lead", comments: "", contactReceived: "Y", formSent: "Y", formReceived: "" },
+      { number: 2, vendorName: "Pedestal AI", contactEmail: "raj@pedestal.ai", contactName: "Raj Aggarwal", role: "CEO", comments: "", contactReceived: "Y", formSent: "Y", formReceived: "Y" },
+      { number: 3, vendorName: "Sligo AI", contactEmail: "mireia@sligo.ai", contactName: "Mireia Brancos", role: "CRO", comments: "", contactReceived: "Y", formSent: "Y", formReceived: "Y" },
+      { number: 4, vendorName: "Kore.ai", contactEmail: "meenakshi.ranjan@kore.com", contactName: "Meenakshi Ranjan", role: "Global Marketing Manager", comments: "", contactReceived: "Y", formSent: "Y", formReceived: "Y" },
+    ],
+    demoVendors: [
+      { number: 1, vendorName: "Pedestal AI", contactEmail: "raj@pedestal.ai", contactName: "Raj Aggarwal", role: "CEO", nda: "Y", demoDate: "31st October", plus: "Insights analysis; accuracy", minus: "Speed", pocCost: "$25,000", deploymentCost: "Based on value generation" },
+      { number: 2, vendorName: "Sligo AI", contactEmail: "mireia@sligo.ai", contactName: "Mireia Brancos", role: "CRO", nda: "Y", demoDate: "4th November", plus: "N/A", minus: "Backed out", pocCost: "$30,000", deploymentCost: "N/A" },
+      { number: 3, vendorName: "Kore.ai", contactEmail: "lyndsee.manna@kore.com", contactName: "Lyndsee Manna", role: "Strategic Enterprise Account Executive", nda: "Y", demoDate: "4th November", plus: "Plug and play agents", minus: "", pocCost: "", deploymentCost: "Pricing follow-up required" },
+      { number: 4, vendorName: "DXC", contactEmail: "matthias.bauhammer@dxc.com", contactName: "Matthias Bauhammer", role: "Head of Data & AI", nda: "Y", demoDate: "6th November", plus: "", minus: "", pocCost: "", deploymentCost: "" },
+      { number: 5, vendorName: "Reinvent", contactEmail: "miljenko.bakovic@reeinvent.com", contactName: "Miljenko Bakovic", role: "CEO", nda: "Y", demoDate: "3rd November", plus: "Speed", minus: "", pocCost: "", deploymentCost: "" },
+    ],
+    vendorEvaluations: [
+      { vendorName: "Pedestal AI", strategicFit: "5", logisticsFit: "4", integrationFit: "4", securityReadiness: "4", speedToValue: "5", commercialFit: "4", notes: "Strong fit for customer-facing customs use case with fast path to pilot." },
+      { vendorName: "Kore.ai", strategicFit: "4", logisticsFit: "3", integrationFit: "4", securityReadiness: "4", speedToValue: "4", commercialFit: "3", notes: "Mature enterprise platform with strong agent model, but pricing and fit need more diligence." },
+      { vendorName: "Beam.ai", strategicFit: "3", logisticsFit: "3", integrationFit: "3", securityReadiness: "3", speedToValue: "4", commercialFit: "3", notes: "Interesting automation path, but less direct fit for the primary customer-facing use case." },
+      { vendorName: "Sligo AI", strategicFit: "3", logisticsFit: "3", integrationFit: "3", securityReadiness: "3", speedToValue: "2", commercialFit: "2", notes: "Backed out during demo cycle, reducing execution confidence." },
+    ],
+    selectedVendor: "Pedestal AI",
+    strategicAlignment: "Strong strategic fit for customer-facing customs services and the broader push toward reusable AI-enabled service experiences.",
+    timeToMarket: "Fastest route is to leverage an existing conversational AI platform and adapt it to customs workflows rather than building the stack from scratch.",
+    capabilitiesFit: "Core conversational capabilities exist in the market, but the final solution still depends on integration approach, enterprise controls, and how customs knowledge is grounded.",
+    partnerSummary: "Recommend proceeding with a partner-led route using an established conversational AI platform that can be adapted quickly and scaled across customs use cases.",
+    value: "Higher retention, lower support friction, stronger customer experience, and a reusable AI capability for customs services.",
+    blockers: "Solution architecture, data readiness, and cross-functional execution ownership are not yet locked.",
+    notes: "Derived from the Customs Services discovery sheet for the Customer Facing Conversational AI case.",
+  },
+];
+
+const sampleDecisions = [
+  {
+    id: 1,
+    project: "AI Literacy Mapping for Leadership",
+    decision: "Confirm first leadership pilot group",
+    owner: "Yujie Su",
+    due: "2026-06-07",
+    recommendation: "Prioritize for Scouting",
+    finalDecision: "Pending",
+    status: "Open",
+    notes: "Agree required deliverables.",
+  },
+  {
+    id: 2,
+    project: "Cargo Insurance Tech Assessment",
+    decision: "Run vendor PoC or internal prototype",
+    owner: "CRM Innovation Lead",
+    due: "2026-06-11",
+    recommendation: "Select for PoC",
+    finalDecision: "Pending",
+    status: "Open",
+    notes: "Needs value sizing and data check.",
+  },
+];
+
+function normalizeProject(item) {
+  const next = { ...emptyProject, ...item };
+  if (next.stage && stageMigrationMap[next.stage]) next.stage = stageMigrationMap[next.stage];
+  if (next.recommendation && recommendationMigrationMap[next.recommendation]) next.recommendation = recommendationMigrationMap[next.recommendation];
+  return next;
+}
+
+function normalizeDecision(item) {
+  return { ...emptyDecision, ...item };
+}
+
+function cx(...classes) {
+  return classes.filter(Boolean).join(" ");
+}
+
+function saveJson(name, payload) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function saveCsv(name, rows) {
+  if (!rows.length) return;
+  const headers = Object.keys(rows[0]);
+  const safe = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+  const csv = [headers.map(safe).join(","), ...rows.map((row) => headers.map((key) => safe(row[key])).join(","))].join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function hydrateImportedState(raw) {
+  if (!raw || typeof raw !== "object") throw new Error("Expected a JSON object.");
+  const projects = Array.isArray(raw.projects) ? raw.projects : Array.isArray(raw[STORAGE_KEYS.projects]) ? raw[STORAGE_KEYS.projects] : null;
+  const decisions = Array.isArray(raw.decisions) ? raw.decisions : Array.isArray(raw[STORAGE_KEYS.decisions]) ? raw[STORAGE_KEYS.decisions] : null;
+  if (!projects || !decisions) throw new Error("JSON must include both projects and decisions arrays.");
+  return {
+    projects: projects.map(normalizeProject),
+    decisions: decisions.map(normalizeDecision),
+  };
+}
+
+function parseDate(value) {
+  if (!value) return null;
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function daysUntil(value) {
+  const date = parseDate(value);
+  if (!date) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((date.getTime() - today.getTime()) / 86400000);
+}
+
+function formatRelative(value) {
+  const days = daysUntil(value);
+  if (days === null) return "No date";
+  if (days < 0) return `${Math.abs(days)}d overdue`;
+  if (days === 0) return "Due today";
+  if (days === 1) return "Due tomorrow";
+  return `Due in ${days}d`;
+}
+
+function startOfDay(date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function startOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function addMonths(date, count) {
+  return new Date(date.getFullYear(), date.getMonth() + count, 1);
+}
+
+function monthsBetween(start, end) {
+  return (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+}
+
+function formatShortDate(value) {
+  const date = parseDate(value);
+  if (!date) return "—";
+  return date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+// Maps a date onto an x offset where each month occupies exactly monthWidth px,
+// so bars stay aligned with the uniform month gridlines regardless of month length.
+function dateToOffset(date, rangeStart, monthWidth) {
+  const monthIndex = monthsBetween(rangeStart, date);
+  const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  const fraction = (date.getDate() - 1) / daysInMonth;
+  return (monthIndex + fraction) * monthWidth;
+}
+
+const STATUS_BAR = {
+  Green: { bar: "bg-emerald-500", soft: "bg-emerald-100", text: "text-emerald-700" },
+  Amber: { bar: "bg-amber-500", soft: "bg-amber-100", text: "text-amber-700" },
+  Red: { bar: "bg-rose-500", soft: "bg-rose-100", text: "text-rose-700" },
+  Blocked: { bar: "bg-slate-500", soft: "bg-slate-200", text: "text-slate-700" },
+  Completed: { bar: "bg-sky-500", soft: "bg-sky-100", text: "text-sky-700" },
+};
+
+function getProjectHealth(project) {
+  const days = daysUntil(project.targetDate);
+  if (project.status === "Blocked" || project.status === "Red") return "critical";
+  if (days !== null && days < 0) return "critical";
+  if (days !== null && days <= 7) return "watch";
+  return "stable";
+}
+
+function nextStage(stage) {
+  const index = stages.indexOf(stage);
+  if (index < 0 || index >= stages.length - 1) return null;
+  return stages[index + 1];
+}
+
+function getStageDecisionGuide(project, stage, relatedDecisions) {
+  const guides = {
+    "Problem Articulation": {
+      title: "Can this move into scouting?",
+      decision: "Confirm the problem is specific, material, and owned by the business.",
+      required: [
+        ["problem", "Problem statement"],
+        ["impact", "Operational impact"],
+        ["financialImpact", "Financial impact"],
+        ["objectivePrimary", "Primary objective"],
+      ],
+    },
+    "Scouting": {
+      title: "Is the opportunity ready for solution scouting?",
+      decision: "Validate the current state, failure points, and why existing approaches are insufficient.",
+      required: [
+        ["currentChallenges", "Current challenges"],
+        ["previousSolutions", "Previous solutions tested"],
+        ["blockers", "Key blockers"],
+      ],
+    },
+    "POC": {
+      title: "Is this ready for a proof of concept?",
+      decision: "Confirm the target solution, risks, and what support is needed to run a focused test.",
+      required: [
+        ["dreamScenario", "Target solution"],
+        ["resourcesRequired", "Resources required"],
+        ["implementationRisks", "Implementation risks"],
+        ["value", "Expected value"],
+      ],
+    },
+    "Deployment Planning": {
+      title: "Can this transition into implementation planning?",
+      decision: "Lock the recommendation, target timeline, and operational milestone for rollout.",
+      required: [
+        ["recommendation", "Recommendation"],
+        ["nextMilestone", "Next milestone"],
+        ["targetDate", "Target date"],
+      ],
+    },
+    "Deployment Execution": {
+      title: "Is execution under control?",
+      decision: "Monitor whether blockers, milestones, and open approvals are under active management.",
+      required: [
+        ["blockers", "Execution blockers"],
+        ["nextMilestone", "Current milestone"],
+      ],
+    },
+    "Measuring Success": {
+      title: "Can the outcome be measured and scaled?",
+      decision: "Confirm the realized value, financial impact, and scale pathway after delivery.",
+      required: [
+        ["financialImpact", "Financial impact"],
+        ["scalabilityVision", "Scalability vision"],
+        ["value", "Expected value"],
+      ],
+    },
+  };
+
+  const guide = guides[stage];
+  const missing = guide.required.filter(([key]) => !String(project[key] || "").trim()).map(([, label]) => label);
+  const readiness = missing.length === 0 ? "Ready" : missing.length <= 2 ? "Needs review" : "Not ready";
+
+  return {
+    ...guide,
+    missing,
+    readiness,
+    openDecisionCount: relatedDecisions.length,
+  };
+}
+
+function getStageRequirements(stage) {
+  const requirements = {
+    "Problem Articulation": [
+      ["name", "Project name"],
+      ["owner", "Owner"],
+      ["problem", "Problem statement"],
+      ["impact", "Operational impact"],
+      ["objectivePrimary", "Primary objective"],
+    ],
+    "Scouting": [
+      ["currentChallenges", "Current challenges"],
+      ["previousSolutions", "Previous solutions tested"],
+      ["curatedVendors", "Vendor longlist"],
+      ["selectedVendors", "Shortlisted vendors"],
+      ["vendorEvaluations", "Vendor scorecards"],
+    ],
+    "POC": [
+      ["dreamScenario", "Target solution"],
+      ["selectedVendor", "Selected vendor"],
+      ["implementationRisks", "Implementation risks"],
+      ["partnerSummary", "Partner recommendation summary"],
+    ],
+    "Deployment Planning": [
+      ["recommendation", "Recommendation"],
+      ["targetDate", "Target date"],
+      ["nextMilestone", "Next milestone"],
+    ],
+    "Deployment Execution": [
+      ["status", "Execution status"],
+      ["blockers", "Execution blockers"],
+      ["nextMilestone", "Current milestone"],
+    ],
+    "Measuring Success": [
+      ["value", "Outcome value"],
+      ["financialImpact", "Financial impact"],
+      ["scalabilityVision", "Scalability vision"],
+    ],
+  };
+  return requirements[stage] || [];
+}
+
+function hasValue(value) {
+  if (Array.isArray(value)) return value.length > 0;
+  return String(value || "").trim().length > 0;
+}
+
+function createActivityEntry(type, text) {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    type,
+    text,
+    at: new Date().toISOString(),
+  };
+}
+
+function scoreVendorEvaluation(evaluation) {
+  const keys = ["strategicFit", "logisticsFit", "integrationFit", "securityReadiness", "speedToValue", "commercialFit"];
+  const values = keys.map((key) => Number(evaluation?.[key] || 0)).filter((value) => value > 0);
+  if (!values.length) return null;
+  const total = values.reduce((sum, value) => sum + value, 0);
+  return Number((total / values.length).toFixed(1));
+}
+
+function getVendorLeaderboard(project) {
+  return (project.vendorEvaluations || [])
+    .map((evaluation) => ({
+      ...evaluation,
+      score: scoreVendorEvaluation(evaluation),
+    }))
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+}
+
+function normalizeText(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function findProjectByName(projects, query) {
+  const target = normalizeText(query);
+  if (!target) return null;
+
+  const exact = projects.find((project) => normalizeText(project.name) === target);
+  if (exact) return exact;
+
+  const partial = projects.find((project) => normalizeText(project.name).includes(target) || target.includes(normalizeText(project.name)));
+  return partial || null;
+}
+
+function getStageCompletion(project, stage) {
+  const required = getStageRequirements(stage);
+  const completed = required.filter(([key]) => hasValue(project[key])).length;
+  const total = required.length;
+  return {
+    completed,
+    total,
+    percent: total ? Math.round((completed / total) * 100) : 0,
+  };
+}
+
+function Badge({ children, tone = "default" }) {
+  const styles = {
+    Green: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    Amber: "border-amber-200 bg-amber-50 text-amber-700",
+    Red: "border-rose-200 bg-rose-50 text-rose-700",
+    Blocked: "border-slate-300 bg-slate-100 text-slate-700",
+    Completed: "border-sky-200 bg-sky-50 text-sky-700",
+    Strategic: "border-cyan-200 bg-cyan-50 text-cyan-800",
+    High: "border-orange-200 bg-orange-50 text-orange-700",
+    Medium: "border-sky-200 bg-sky-50 text-sky-700",
+    Low: "border-slate-200 bg-slate-50 text-slate-600",
+    critical: "border-rose-200 bg-rose-50 text-rose-700",
+    watch: "border-amber-200 bg-amber-50 text-amber-700",
+    stable: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    default: "border-slate-200 bg-white text-slate-600",
+  };
+  return <span className={cx("inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium", styles[tone] || styles.default)}>{children}</span>;
+}
+
+function Card({ className = "", children }) {
+  return <div className={cx("rounded-2xl border border-slate-200 bg-white", className)}>{children}</div>;
+}
+
+function Button({ children, variant = "primary", className = "", ...props }) {
+  const styles = {
+    primary: "bg-[#0F7EA8] text-white hover:bg-[#0a6b90]",
+    secondary: "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+    danger: "border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100",
+  };
+  return <button className={cx("inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition", styles[variant], className)} {...props}>{children}</button>;
+}
+
+function Input({ className = "", ...props }) {
+  return <input {...props} className={cx("h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-[#0F7EA8] focus:ring-4 focus:ring-cyan-100", className)} />;
+}
+
+function Textarea({ className = "", ...props }) {
+  return <textarea {...props} className={cx("min-h-24 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-[#0F7EA8] focus:ring-4 focus:ring-cyan-100", className)} />;
+}
+
+function Select({ options, className = "", ...props }) {
+  return <select {...props} className={cx("h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-[#0F7EA8] focus:ring-4 focus:ring-cyan-100", className)}>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select>;
+}
+
+function Field({ label, children, wide = false }) {
+  return <label className={wide ? "md:col-span-2" : "block"}><span className="text-sm font-medium text-slate-700">{label}</span><div className="mt-1.5">{children}</div></label>;
+}
+
+function EditableTable({ title, description, columns, rows, onChange, createRow }) {
+  const updateCell = (rowIndex, key, value) => {
+    onChange(rows.map((row, index) => (index === rowIndex ? { ...row, [key]: value } : row)));
+  };
+
+  const removeRow = (rowIndex) => {
+    onChange(rows.filter((_, index) => index !== rowIndex));
+  };
+
+  const addRow = () => {
+    onChange([...rows, createRow(rows.length)]);
+  };
+
+  return (
+    <StagePanel title={title} description={description}>
+      <div className="space-y-4">
+        {rows.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-500">
+            No entries yet. Add the first row to capture this stage properly.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {rows.map((row, rowIndex) => (
+              <div key={rowIndex} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-900">Row {rowIndex + 1}</p>
+                  <Button type="button" variant="secondary" className="px-3 py-2 text-xs" onClick={() => removeRow(rowIndex)}>
+                    Remove
+                  </Button>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {columns.map((column) => (
+                    <Field key={column.key} label={column.label} wide={column.wide}>
+                      {column.type === "textarea" ? (
+                        <Textarea
+                          value={row[column.key] || ""}
+                          onChange={(event) => updateCell(rowIndex, column.key, event.target.value)}
+                          className={column.className}
+                        />
+                      ) : (
+                        <Input
+                          value={row[column.key] || ""}
+                          onChange={(event) => updateCell(rowIndex, column.key, event.target.value)}
+                          placeholder={column.placeholder}
+                        />
+                      )}
+                    </Field>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <Button type="button" variant="secondary" onClick={addRow}>
+          <Plus size={16} /> Add row
+        </Button>
+      </div>
+    </StagePanel>
+  );
+}
+
+function Modal({ title, subtitle, onClose, children, width = "max-w-3xl", fullscreen = false }) {
+  return (
+    <div className={cx("fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm", fullscreen ? "p-0" : "flex items-center justify-center p-4")}>
+      <div
+        className={cx(
+          "w-full overflow-y-auto bg-white",
+          fullscreen
+            ? "h-screen"
+            : "max-h-[92vh] rounded-3xl shadow-2xl",
+          !fullscreen && width
+        )}
+      >
+        <div className={cx("sticky top-0 z-10 flex items-start justify-between border-b border-slate-200 bg-white", fullscreen ? "px-8 py-6" : "p-6")}>
+          <div>
+            <p className="text-sm font-semibold text-[#0F7EA8]">{subtitle}</p>
+            <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100">
+            <X size={20} />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ title, value, helper, icon: Icon }) {
+  return (
+    <Card className="p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm text-slate-500">{title}</p>
+          <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{value}</p>
+          <p className="mt-1 text-sm text-slate-500">{helper}</p>
+        </div>
+        <div className="rounded-2xl bg-cyan-50 p-3 text-[#0F7EA8]">
+          <Icon size={20} />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function EmptyState({ title, text, action }) {
+  return (
+    <Card className="p-10 text-center">
+      <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+      <p className="mt-2 text-sm text-slate-500">{text}</p>
+      {action && <div className="mt-5">{action}</div>}
+    </Card>
+  );
+}
+
+function ProjectForm({ project, onSave, onClose }) {
+  const [form, setForm] = useState(project ? { ...emptyProject, ...project } : emptyProject);
+  const [activeStageTab, setActiveStageTab] = useState(project?.stage || "Problem Articulation");
+  const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  const stageCompletion = getStageCompletion(form, activeStageTab);
+
+  useEffect(() => {
+    setActiveStageTab(project?.stage || "Problem Articulation");
+  }, [project?.id, project?.stage]);
+
+  const setStageTab = (stage) => {
+    setActiveStageTab(stage);
+    set("stage", stage);
+  };
+
+  const activeStageIndex = stages.indexOf(activeStageTab);
+
+  const submit = (event) => {
+    event.preventDefault();
+    if (!form.name.trim() || !form.owner.trim()) return;
+    onSave({
+      ...form,
+      stage: activeStageTab,
+      id: form.id || Date.now(),
+      updatedAt: new Date().toISOString(),
+    });
+  };
+
+  const formStages = {
+    "Problem Articulation": (
+      <div className="space-y-4">
+        <StagePanel title="Project setup" description="Core business context and ownership for the problem request.">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Project name"><Input value={form.name} onChange={(e) => set("name", e.target.value)} /></Field>
+            <Field label="Owner"><Input value={form.owner} onChange={(e) => set("owner", e.target.value)} /></Field>
+            <Field label="Date requested"><Input type="date" value={form.dateRequested} onChange={(e) => set("dateRequested", e.target.value)} /></Field>
+            <Field label="Business function / area"><Input value={form.businessFunction} onChange={(e) => set("businessFunction", e.target.value)} placeholder="e.g. Warehouse Safety / Security" /></Field>
+            <Field label="Business stakeholder"><Input value={form.stakeholderName} onChange={(e) => set("stakeholderName", e.target.value)} /></Field>
+            <Field label="Primary area / region"><Input value={form.regionScope} onChange={(e) => set("regionScope", e.target.value)} placeholder="e.g. USA / NAM" /></Field>
+            <Field label="Product area"><Select value={form.productArea} onChange={(e) => set("productArea", e.target.value)} options={products} /></Field>
+            <Field label="Priority"><Select value={form.priority} onChange={(e) => set("priority", e.target.value)} options={priorities} /></Field>
+            <Field label="Status"><Select value={form.status} onChange={(e) => set("status", e.target.value)} options={statuses} /></Field>
+            <Field label="Recommendation"><Select value={form.recommendation} onChange={(e) => set("recommendation", e.target.value)} options={recommendations} /></Field>
+          </div>
+        </StagePanel>
+        <div className="grid gap-4 md:grid-cols-2">
+          <StagePanel title="Problem statement">
+            <Textarea value={form.problem} onChange={(e) => set("problem", e.target.value)} />
+          </StagePanel>
+          <StagePanel title="Impact">
+            <Textarea value={form.impact} onChange={(e) => set("impact", e.target.value)} />
+          </StagePanel>
+          <StagePanel title="Financial impact">
+            <Textarea value={form.financialImpact} onChange={(e) => set("financialImpact", e.target.value)} />
+          </StagePanel>
+          <StagePanel title="Objectives">
+            <div className="space-y-3">
+              <Field label="Primary objective"><Textarea value={form.objectivePrimary} onChange={(e) => set("objectivePrimary", e.target.value)} /></Field>
+              <Field label="Secondary objective"><Textarea value={form.objectiveSecondary} onChange={(e) => set("objectiveSecondary", e.target.value)} /></Field>
+            </div>
+          </StagePanel>
+        </div>
+      </div>
+    ),
+    "Scouting": (
+      <div className="space-y-4">
+        <StagePanel title="Current state" description="Describe how the business handles this today and where the operational gaps are.">
+          <Textarea value={form.currentChallenges} onChange={(e) => set("currentChallenges", e.target.value)} className="min-h-40" />
+        </StagePanel>
+        <div className="grid gap-4 md:grid-cols-2">
+          <StagePanel title="Previous solutions tested">
+            <Textarea value={form.previousSolutions} onChange={(e) => set("previousSolutions", e.target.value)} className="min-h-36" />
+          </StagePanel>
+          <StagePanel title="Blockers / risks">
+            <Textarea value={form.blockers} onChange={(e) => set("blockers", e.target.value)} className="min-h-36" />
+          </StagePanel>
+        </div>
+        <StagePanel title="Scouting notes">
+          <Textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} className="min-h-32" />
+        </StagePanel>
+        <EditableTable
+          title="Vendor curated list"
+          description="Capture the longlist of vendors reviewed during scouting."
+          rows={form.curatedVendors}
+          onChange={(rows) => set("curatedVendors", rows)}
+          createRow={(index) => ({ number: index + 1, vendorName: "", cluster: "", website: "", origin: "", fundingRound: "", description: "" })}
+          columns={[
+            { key: "vendorName", label: "Vendor name" },
+            { key: "cluster", label: "Technology cluster" },
+            { key: "website", label: "Website" },
+            { key: "origin", label: "Origin" },
+            { key: "fundingRound", label: "Funding round" },
+            { key: "description", label: "Brief description", type: "textarea", wide: true, className: "min-h-28" },
+          ]}
+        />
+        <EditableTable
+          title="Top vendor selection"
+          description="Track the partners moved into outreach and application handling."
+          rows={form.selectedVendors}
+          onChange={(rows) => set("selectedVendors", rows)}
+          createRow={(index) => ({ number: index + 1, vendorName: "", contactEmail: "", contactName: "", role: "", contactReceived: "", formSent: "", formReceived: "" })}
+          columns={[
+            { key: "vendorName", label: "Vendor name" },
+            { key: "contactName", label: "Contact name" },
+            { key: "role", label: "Role" },
+            { key: "contactEmail", label: "Contact email" },
+            { key: "contactReceived", label: "Contact received" },
+            { key: "formSent", label: "Application sent" },
+            { key: "formReceived", label: "Application received" },
+          ]}
+        />
+        <EditableTable
+          title="Vendors selected for demo"
+          description="Keep the demo shortlist, commercial signal, and key tradeoffs in one place."
+          rows={form.demoVendors}
+          onChange={(rows) => set("demoVendors", rows)}
+          createRow={(index) => ({ number: index + 1, vendorName: "", demoDate: "", plus: "", minus: "", pocCost: "", deploymentCost: "" })}
+          columns={[
+            { key: "vendorName", label: "Vendor name" },
+            { key: "demoDate", label: "Demo date" },
+            { key: "pocCost", label: "PoC cost" },
+            { key: "deploymentCost", label: "Deployment cost" },
+            { key: "plus", label: "Strengths", type: "textarea", className: "min-h-24" },
+            { key: "minus", label: "Weaknesses", type: "textarea", className: "min-h-24" },
+          ]}
+        />
+        <EditableTable
+          title="Vendor scorecards"
+          description="Score the serious candidates so the partner decision is explicit instead of buried in notes."
+          rows={form.vendorEvaluations}
+          onChange={(rows) => set("vendorEvaluations", rows)}
+          createRow={() => ({ vendorName: "", strategicFit: "", logisticsFit: "", integrationFit: "", securityReadiness: "", speedToValue: "", commercialFit: "", notes: "" })}
+          columns={[
+            { key: "vendorName", label: "Vendor name" },
+            { key: "strategicFit", label: "Strategic fit (1-5)" },
+            { key: "logisticsFit", label: "Logistics fit (1-5)" },
+            { key: "integrationFit", label: "Integration fit (1-5)" },
+            { key: "securityReadiness", label: "Security readiness (1-5)" },
+            { key: "speedToValue", label: "Speed to value (1-5)" },
+            { key: "commercialFit", label: "Commercial fit (1-5)" },
+            { key: "notes", label: "Evaluation notes", type: "textarea", wide: true, className: "min-h-24" },
+          ]}
+        />
+      </div>
+    ),
+    "POC": (
+      <div className="space-y-4">
+        <StagePanel title="Target solution" description="Describe the desired future state or concept to test.">
+          <Textarea value={form.dreamScenario} onChange={(e) => set("dreamScenario", e.target.value)} className="min-h-40" />
+        </StagePanel>
+        <div className="grid gap-4 md:grid-cols-2">
+          <StagePanel title="Resources required">
+            <Textarea value={form.resourcesRequired} onChange={(e) => set("resourcesRequired", e.target.value)} className="min-h-32" />
+          </StagePanel>
+          <StagePanel title="Implementation risks">
+            <Textarea value={form.implementationRisks} onChange={(e) => set("implementationRisks", e.target.value)} className="min-h-32" />
+          </StagePanel>
+        </div>
+        <StagePanel title="Expected value">
+          <Textarea value={form.value} onChange={(e) => set("value", e.target.value)} className="min-h-32" />
+        </StagePanel>
+        <StagePanel title="Partner application assessment" description="Capture the commercial and strategic decision basis for the preferred partner.">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Selected vendor">
+              <Input list="selected-vendor-options" value={form.selectedVendor} onChange={(e) => set("selectedVendor", e.target.value)} placeholder="e.g. Pedestal AI" />
+              <datalist id="selected-vendor-options">
+                {getVendorLeaderboard(form).map((vendor) => <option key={vendor.vendorName} value={vendor.vendorName} />)}
+              </datalist>
+            </Field>
+            <Field label="Recommendation"><Select value={form.recommendation} onChange={(e) => set("recommendation", e.target.value)} options={recommendations} /></Field>
+            <Field label="Strategic alignment"><Textarea value={form.strategicAlignment} onChange={(e) => set("strategicAlignment", e.target.value)} className="min-h-28" /></Field>
+            <Field label="Time to market"><Textarea value={form.timeToMarket} onChange={(e) => set("timeToMarket", e.target.value)} className="min-h-28" /></Field>
+            <Field label="Capabilities fit"><Textarea value={form.capabilitiesFit} onChange={(e) => set("capabilitiesFit", e.target.value)} className="min-h-28" /></Field>
+            <Field label="Partner recommendation summary"><Textarea value={form.partnerSummary} onChange={(e) => set("partnerSummary", e.target.value)} className="min-h-28" /></Field>
+          </div>
+        </StagePanel>
+      </div>
+    ),
+    "Deployment Planning": (
+      <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <StagePanel title="Milestone plan">
+            <div className="space-y-3">
+              <Field label="Target date"><Input type="date" value={form.targetDate} onChange={(e) => set("targetDate", e.target.value)} /></Field>
+              <Field label="Next milestone"><Input value={form.nextMilestone} onChange={(e) => set("nextMilestone", e.target.value)} /></Field>
+            </div>
+          </StagePanel>
+          <StagePanel title="Planning notes">
+            <Textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} className="min-h-36" />
+          </StagePanel>
+        </div>
+        <StagePanel title="Recommendation">
+          <Select value={form.recommendation} onChange={(e) => set("recommendation", e.target.value)} options={recommendations} />
+        </StagePanel>
+      </div>
+    ),
+    "Deployment Execution": (
+      <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <StagePanel title="Execution blockers">
+            <Textarea value={form.blockers} onChange={(e) => set("blockers", e.target.value)} className="min-h-36" />
+          </StagePanel>
+          <StagePanel title="Current milestone">
+            <div className="space-y-3">
+              <Field label="Next milestone"><Input value={form.nextMilestone} onChange={(e) => set("nextMilestone", e.target.value)} /></Field>
+              <Field label="Status"><Select value={form.status} onChange={(e) => set("status", e.target.value)} options={statuses} /></Field>
+            </div>
+          </StagePanel>
+        </div>
+        <StagePanel title="Execution notes">
+          <Textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} className="min-h-32" />
+        </StagePanel>
+      </div>
+    ),
+    "Measuring Success": (
+      <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <StagePanel title="Outcome value">
+            <Textarea value={form.value} onChange={(e) => set("value", e.target.value)} className="min-h-32" />
+          </StagePanel>
+          <StagePanel title="Scalability vision">
+            <Textarea value={form.scalabilityVision} onChange={(e) => set("scalabilityVision", e.target.value)} className="min-h-32" />
+          </StagePanel>
+        </div>
+        <StagePanel title="Financial impact">
+          <Textarea value={form.financialImpact} onChange={(e) => set("financialImpact", e.target.value)} className="min-h-32" />
+        </StagePanel>
+        <StagePanel title="Outcome notes">
+          <Textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} className="min-h-32" />
+        </StagePanel>
+      </div>
+    ),
+  };
+
+  return (
+    <Modal title={form.id ? "Edit project" : "New project"} subtitle="Project" fullscreen>
+      <form onSubmit={submit}>
+        <div className="space-y-6 bg-[#fbfcfe] px-8 py-6">
+          <div className="mx-auto w-full max-w-[1600px] space-y-6">
+            <div className="grid gap-4 xl:grid-cols-4">
+              <Card className="border-slate-200/80 p-5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Owner</p>
+                <p className="mt-2 text-sm text-slate-900">{form.owner || "Not set"}</p>
+              </Card>
+              <Card className="border-slate-200/80 p-5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Business function</p>
+                <p className="mt-2 text-sm text-slate-900">{form.businessFunction || "Not set"}</p>
+                <p className="mt-1 text-xs text-slate-500">{form.regionScope || "No primary region"}</p>
+              </Card>
+              <Card className="border-slate-200/80 p-5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Target date</p>
+                <p className="mt-2 text-sm text-slate-900">{form.targetDate || "Not set"}</p>
+              </Card>
+              <Card className="border-slate-200/80 p-5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Current stage</p>
+                <p className="mt-2 text-sm text-slate-900">{activeStageTab}</p>
+              </Card>
+            </div>
+
+            <Card className="overflow-hidden border-slate-200/80 bg-white">
+              <div className="border-b border-slate-200 bg-white px-6 py-5">
+                <div className="flex gap-2 overflow-x-auto">
+                  {stages.map((stage, index) => {
+                    const isActive = stage === activeStageTab;
+                    return (
+                      <button
+                        key={stage}
+                        type="button"
+                        onClick={() => setStageTab(stage)}
+                        className={cx(
+                          "inline-flex shrink-0 items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold transition",
+                          isActive
+                            ? "border-[#0F7EA8] bg-[#f7fbff] text-[#0F7EA8]"
+                            : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-900"
+                        )}
+                      >
+                        <span className={cx(
+                          "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
+                          isActive ? "bg-[#0F7EA8] text-white" : "bg-slate-100 text-slate-500"
+                        )}>
+                          {index + 1}
+                        </span>
+                        <span className="whitespace-nowrap">{stage}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="border-b border-slate-200 bg-slate-50/40 px-6 py-5">
+                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-[#0F7EA8]">Workflow stage</p>
+                    <h3 className="mt-1 text-2xl font-semibold text-slate-900">{activeStageTab}</h3>
+                    <p className="mt-1 text-sm text-slate-500">Complete only the fields needed for this stage.</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-500">
+                      Step {activeStageIndex + 1} of {stages.length}
+                    </div>
+                    <div className="min-w-[160px]">
+                      <div className="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <span>Completion</span>
+                        <span>{stageCompletion.completed}/{stageCompletion.total}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-200">
+                        <div className="h-2 rounded-full bg-[#0F7EA8]" style={{ width: `${stageCompletion.percent}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6">
+                {formStages[activeStageTab]}
+              </div>
+            </Card>
+          </div>
+        </div>
+        <div className="sticky bottom-0 border-t border-slate-200 bg-white/98 px-8 py-4 backdrop-blur">
+          <div className="mx-auto flex w-full max-w-[1600px] flex-wrap items-center justify-between gap-3">
+            <Button type="button" variant="secondary" className="rounded-full px-5" onClick={onClose}>Cancel</Button>
+            <div className="flex flex-wrap gap-2">
+              {activeStageIndex > 0 && (
+                <Button type="button" variant="secondary" className="rounded-full px-5" onClick={() => setStageTab(stages[activeStageIndex - 1])}>
+                  Previous
+                </Button>
+              )}
+              {activeStageIndex < stages.length - 1 && (
+                <Button type="button" variant="secondary" className="rounded-full px-5" onClick={() => setStageTab(stages[activeStageIndex + 1])}>
+                  Next
+                  <ChevronRight size={16} />
+                </Button>
+              )}
+              <Button type="submit" className="rounded-full px-5">Save project</Button>
+            </div>
+          </div>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function DecisionForm({ decision, projects, onSave, onClose }) {
+  const [form, setForm] = useState(decision ? { ...emptyDecision, ...decision } : { ...emptyDecision, project: projects[0]?.name || "" });
+  const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+
+  const submit = (event) => {
+    event.preventDefault();
+    if (!form.project || !form.decision.trim()) return;
+    onSave({
+      ...form,
+      id: form.id || Date.now(),
+      updatedAt: new Date().toISOString(),
+    });
+  };
+
+  return (
+    <Modal title={form.id ? "Edit decision" : "New decision"} subtitle="Decision">
+      <form onSubmit={submit}>
+        <div className="grid gap-5 p-6 md:grid-cols-2">
+          <Field label="Project">
+            <Input
+              list="project-options"
+              value={form.project}
+              onChange={(e) => set("project", e.target.value)}
+              placeholder="Select or type project name"
+            />
+            <datalist id="project-options">
+              {projects.map((project) => <option key={project.id} value={project.name} />)}
+            </datalist>
+          </Field>
+          <Field label="Owner"><Input value={form.owner} onChange={(e) => set("owner", e.target.value)} /></Field>
+          <Field label="Due date"><Input type="date" value={form.due} onChange={(e) => set("due", e.target.value)} /></Field>
+          <Field label="Status"><Select value={form.status} onChange={(e) => set("status", e.target.value)} options={["Open", "Blocked", "Closed"]} /></Field>
+          <Field label="Recommendation"><Select value={form.recommendation} onChange={(e) => set("recommendation", e.target.value)} options={recommendations} /></Field>
+          <Field label="Final decision"><Input value={form.finalDecision} onChange={(e) => set("finalDecision", e.target.value)} /></Field>
+          <Field label="Decision needed" wide><Textarea value={form.decision} onChange={(e) => set("decision", e.target.value)} /></Field>
+          <Field label="Notes" wide><Textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} /></Field>
+        </div>
+        <div className="flex justify-between border-t border-slate-200 p-6">
+          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="submit">Save decision</Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function Overview({ projects, decisions, onOpenProject, onSetView }) {
+  const openDecisions = decisions.filter((decision) => decision.status !== "Closed");
+  const [showAllProjects, setShowAllProjects] = useState(false);
+  const orderedProjects = projects
+    .map((project) => ({ ...project, health: getProjectHealth(project) }))
+    .sort((a, b) => {
+      const order = { critical: 0, watch: 1, stable: 2 };
+      const byHealth = (order[a.health] ?? 9) - (order[b.health] ?? 9);
+      if (byHealth !== 0) return byHealth;
+      return (daysUntil(a.targetDate) ?? 999) - (daysUntil(b.targetDate) ?? 999);
+    });
+  const visibleProjects = showAllProjects ? orderedProjects : orderedProjects.slice(0, 3);
+
+  const byStage = stages.map((stage) => ({
+    stage,
+    count: projects.filter((project) => project.stage === stage).length,
+  }));
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard title="Projects" value={projects.length} helper="Tracked portfolio items" icon={FolderKanban} />
+        <MetricCard title="Open decisions" value={openDecisions.length} helper="Pending alignment" icon={ClipboardCheck} />
+        <MetricCard title="At risk" value={projects.filter((project) => ["Red", "Blocked"].includes(project.status)).length} helper="Red or blocked items" icon={AlertTriangle} />
+        <MetricCard title="Completed" value={projects.filter((project) => project.status === "Completed").length} helper="Delivered or closed" icon={CheckCircle2} />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+        <Card className="p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-[#0F7EA8]">Portfolio queue</p>
+              <h3 className="mt-1 text-xl font-semibold text-slate-900">Projects to review</h3>
+              <p className="mt-1 text-sm text-slate-500">Top projects are visible first. Expand the list when you want the rest.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {orderedProjects.length > 3 && (
+                <Button variant="secondary" onClick={() => setShowAllProjects((current) => !current)}>
+                  {showAllProjects ? "Show less" : `Show all (${orderedProjects.length})`}
+                </Button>
+              )}
+              <Button variant="secondary" onClick={() => onSetView("Projects")}>Open projects</Button>
+            </div>
+          </div>
+          <div className="mt-5 space-y-3">
+            {orderedProjects.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-5 text-sm text-slate-500">No projects available.</div>
+            ) : (
+              visibleProjects.map((project) => (
+                <button key={project.id} onClick={() => onOpenProject(project)} className="flex w-full items-center justify-between gap-4 rounded-2xl border border-slate-200 p-4 text-left transition hover:border-cyan-200 hover:bg-cyan-50/40">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900">{project.name}</p>
+                    <p className="mt-1 text-sm text-slate-500">{project.stage} · {project.owner} · {formatRelative(project.targetDate)}</p>
+                    {project.nextMilestone && <p className="mt-2 text-sm text-slate-700">Next: {project.nextMilestone}</p>}
+                  </div>
+                  <Badge tone={project.health}>{project.health === "critical" ? "Needs action" : "Watch"}</Badge>
+                </button>
+              ))
+            )}
+            {!showAllProjects && orderedProjects.length > 3 && (
+              <button
+                type="button"
+                onClick={() => setShowAllProjects(true)}
+                className="flex w-full items-center justify-center rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-sm font-semibold text-slate-600 transition hover:border-slate-400 hover:text-slate-900"
+              >
+                Show {orderedProjects.length - 3} more projects
+              </button>
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <p className="text-sm font-semibold text-[#0F7EA8]">Stage distribution</p>
+          <div className="mt-5 space-y-4">
+            {byStage.map((item) => (
+              <div key={item.stage}>
+                <div className="mb-1 flex items-center justify-between text-sm">
+                  <span className="text-slate-700">{item.stage}</span>
+                  <span className="font-semibold text-slate-900">{item.count}</span>
+                </div>
+                <div className="h-2 rounded-full bg-slate-100">
+                  <div className="h-2 rounded-full bg-[#0F7EA8]" style={{ width: `${projects.length ? (item.count / projects.length) * 100 : 0}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+    </div>
+  );
+}
+
+function ProjectsView({ projects, onOpenProject, onNewProject, onAdvanceStage, onStatusChange }) {
+  const [query, setQuery] = useState("");
+  const [stage, setStage] = useState("All");
+  const [status, setStatus] = useState("All");
+
+  const filtered = useMemo(() => {
+    return projects.filter((project) => {
+      const haystack = [project.name, project.owner, project.productArea, project.problem].join(" ").toLowerCase();
+      const matchesQuery = haystack.includes(query.toLowerCase());
+      const matchesStage = stage === "All" || project.stage === stage;
+      const matchesStatus = status === "All" || project.status === status;
+      return matchesQuery && matchesStage && matchesStatus;
+    });
+  }, [projects, query, stage, status]);
+
+  return (
+    <div className="space-y-5">
+      <Card className="p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Projects</h3>
+            <p className="text-sm text-slate-500">Portfolio execution view across ownership, stage, timing, and risk.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <div className="relative min-w-[220px]">
+              <Search className="absolute left-3 top-3 text-slate-400" size={16} />
+              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search projects" className="pl-9" />
+            </div>
+            <select value={stage} onChange={(e) => setStage(e.target.value)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm">
+              <option>All</option>
+              {stages.map((item) => <option key={item}>{item}</option>)}
+            </select>
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm">
+              <option>All</option>
+              {statuses.map((item) => <option key={item}>{item}</option>)}
+            </select>
+            <Button onClick={onNewProject}><Plus size={16} /> New project</Button>
+          </div>
+        </div>
+      </Card>
+
+      {filtered.length === 0 ? (
+        <EmptyState title="No projects found" text="Adjust the filters or create a new project." action={<Button onClick={onNewProject}><Plus size={16} /> New project</Button>} />
+      ) : (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-5 py-3">Project</th>
+                  <th className="px-5 py-3">Owner</th>
+                  <th className="px-5 py-3">Stage</th>
+                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3">Priority</th>
+                  <th className="px-5 py-3">Target</th>
+                  <th className="px-5 py-3">Next milestone</th>
+                  <th className="px-5 py-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map((project) => {
+                  const upcoming = nextStage(project.stage);
+                  const completion = getStageCompletion(project, project.stage);
+                  return (
+                    <tr key={project.id} className="hover:bg-cyan-50/30">
+                      <td className="px-5 py-4">
+                        <button onClick={() => onOpenProject(project)} className="text-left">
+                          <p className="font-semibold text-slate-900">{project.name}</p>
+                          <p className="mt-1 text-xs text-slate-500">{project.productArea} · {project.businessFunction || "No business function"}</p>
+                        </button>
+                      </td>
+                      <td className="px-5 py-4 text-slate-700">{project.owner}</td>
+                      <td className="px-5 py-4">
+                        <div className="text-slate-700">{project.stage}</div>
+                        <div className="mt-1 text-xs text-slate-500">{completion.completed}/{completion.total} checks complete</div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <select value={project.status} onChange={(e) => onStatusChange(project.id, e.target.value)} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700">
+                          {statuses.map((item) => <option key={item}>{item}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-5 py-4"><Badge tone={project.priority}>{project.priority}</Badge></td>
+                      <td className="px-5 py-4">
+                        <div className="text-slate-700">{project.targetDate || "—"}</div>
+                        <div className="mt-1 text-xs text-slate-500">{formatRelative(project.targetDate)}</div>
+                      </td>
+                      <td className="px-5 py-4 text-slate-700">{project.nextMilestone || "—"}</td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <Button variant="secondary" className="px-3 py-2 text-xs" onClick={() => onOpenProject(project)}>Open</Button>
+                          {upcoming && <Button className="px-3 py-2 text-xs" onClick={() => onAdvanceStage(project.id)}>{upcoming}</Button>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function RoadmapView({ projects, onOpenProject, onNewProject }) {
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("All");
+  const monthWidth = 116;
+  const leftWidth = 256;
+  const rowHeight = 52;
+  const headerHeight = 48;
+
+  const filtered = useMemo(() => {
+    return projects.filter((project) => {
+      const haystack = [project.name, project.owner, project.productArea].join(" ").toLowerCase();
+      const matchesQuery = haystack.includes(query.toLowerCase());
+      const matchesStatus = status === "All" || project.status === status;
+      return matchesQuery && matchesStatus;
+    });
+  }, [projects, query, status]);
+
+  const { scheduled, unscheduled } = useMemo(() => {
+    const withDates = [];
+    const without = [];
+    for (const project of filtered) {
+      const startRaw = parseDate(project.dateRequested) || parseDate(project.targetDate);
+      const endRaw = parseDate(project.targetDate) || parseDate(project.dateRequested);
+      if (!startRaw && !endRaw) {
+        without.push(project);
+        continue;
+      }
+      const start = startOfDay(startRaw);
+      let end = startOfDay(endRaw);
+      if (end.getTime() < start.getTime()) end = start;
+      withDates.push({ project, start, end });
+    }
+    return { scheduled: withDates, unscheduled: without };
+  }, [filtered]);
+
+  const today = startOfDay(new Date());
+
+  const range = useMemo(() => {
+    if (!scheduled.length) return null;
+    let min = scheduled[0].start;
+    let max = scheduled[0].end;
+    for (const item of scheduled) {
+      if (item.start.getTime() < min.getTime()) min = item.start;
+      if (item.end.getTime() > max.getTime()) max = item.end;
+    }
+    const earliest = min.getTime() < today.getTime() ? min : today;
+    const latest = max.getTime() > today.getTime() ? max : today;
+    const rangeStart = startOfMonth(earliest);
+    const rangeEndMonth = addMonths(startOfMonth(latest), 1);
+    const monthCount = Math.max(monthsBetween(rangeStart, rangeEndMonth), 1);
+    return { rangeStart, monthCount };
+  }, [scheduled, today]);
+
+  const summary = useMemo(() => {
+    let onTrack = 0;
+    let atRisk = 0;
+    let critical = 0;
+    let overdue = 0;
+    for (const project of filtered) {
+      const days = daysUntil(project.targetDate);
+      const isOverdue = days !== null && days < 0 && project.status !== "Completed";
+      if (isOverdue) overdue += 1;
+      if (project.status === "Red" || project.status === "Blocked") critical += 1;
+      else if (project.status === "Amber") atRisk += 1;
+      else onTrack += 1;
+    }
+    return { onTrack, atRisk, critical, overdue, unscheduled: unscheduled.length };
+  }, [filtered, unscheduled]);
+
+  const groups = useMemo(() => {
+    return stages
+      .map((stage) => ({
+        stage,
+        items: scheduled
+          .filter((item) => item.project.stage === stage)
+          .sort((a, b) => a.start.getTime() - b.start.getTime()),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [scheduled]);
+
+  const timelineWidth = range ? range.monthCount * monthWidth : 0;
+  const months = range
+    ? Array.from({ length: range.monthCount }, (_, index) => addMonths(range.rangeStart, index))
+    : [];
+  const todayOffset = range ? dateToOffset(today, range.rangeStart, monthWidth) : 0;
+  const gridBackground = {
+    backgroundImage: `repeating-linear-gradient(to right, #eef2f6 0, #eef2f6 1px, transparent 1px, transparent ${monthWidth}px)`,
+  };
+
+  return (
+    <div className="space-y-5">
+      <Card className="p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Roadmap</h3>
+            <p className="text-sm text-slate-500">Delivery timeline from request to target date, grouped by workflow stage.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <div className="relative min-w-[220px]">
+              <Search className="absolute left-3 top-3 text-slate-400" size={16} />
+              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search projects" className="pl-9" />
+            </div>
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm">
+              <option>All</option>
+              {statuses.map((item) => <option key={item}>{item}</option>)}
+            </select>
+            <Button onClick={onNewProject}><Plus size={16} /> New project</Button>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Badge tone="stable">On track {summary.onTrack}</Badge>
+          <Badge tone="watch">At risk {summary.atRisk}</Badge>
+          <Badge tone="critical">Critical {summary.critical}</Badge>
+          <Badge tone="Red">Overdue {summary.overdue}</Badge>
+          <Badge tone="default">Unscheduled {summary.unscheduled}</Badge>
+        </div>
+      </Card>
+
+      {groups.length === 0 ? (
+        <EmptyState
+          title="Nothing scheduled yet"
+          text="Add a requested date and a target date to a project to place it on the roadmap."
+          action={<Button onClick={onNewProject}><Plus size={16} /> New project</Button>}
+        />
+      ) : (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <div className="relative" style={{ minWidth: leftWidth + timelineWidth }}>
+              <div
+                className="pointer-events-none absolute bottom-0 z-0 w-px bg-rose-400"
+                style={{ left: leftWidth + todayOffset, top: headerHeight }}
+              >
+                <span className="absolute -top-px -translate-x-1/2 rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-semibold text-white">Today</span>
+              </div>
+
+              <div className="flex border-b border-slate-200" style={{ height: headerHeight }}>
+                <div className="sticky left-0 z-20 flex shrink-0 items-end bg-white px-5 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500" style={{ width: leftWidth }}>
+                  Project
+                </div>
+                <div className="relative shrink-0" style={{ width: timelineWidth }}>
+                  {months.map((month, index) => (
+                    <div key={index} className="absolute bottom-2 text-xs text-slate-500" style={{ left: index * monthWidth + 8 }}>
+                      <span className="font-semibold text-slate-600">{month.toLocaleDateString(undefined, { month: "short" })}</span>
+                      {(month.getMonth() === 0 || index === 0) && <span className="ml-1 text-slate-400">{month.getFullYear()}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {groups.map((group) => (
+                <div key={group.stage}>
+                  <div className="flex border-b border-slate-100 bg-slate-50/70">
+                    <div className="sticky left-0 z-20 flex shrink-0 items-center gap-2 bg-slate-50/70 px-5 py-2.5" style={{ width: leftWidth }}>
+                      <span className="text-sm font-semibold text-slate-700">{group.stage}</span>
+                      <span className="rounded-full bg-white px-2 py-0.5 text-xs text-slate-500">{group.items.length}</span>
+                    </div>
+                    <div className="shrink-0" style={{ width: timelineWidth }} />
+                  </div>
+
+                  {group.items.map(({ project, start, end }) => {
+                    const palette = STATUS_BAR[project.status] || STATUS_BAR.Green;
+                    const left = dateToOffset(start, range.rangeStart, monthWidth);
+                    const width = Math.max(dateToOffset(end, range.rangeStart, monthWidth) - left, 8);
+                    const days = daysUntil(project.targetDate);
+                    const isOverdue = days !== null && days < 0 && project.status !== "Completed";
+                    return (
+                      <div key={project.id} className="flex border-b border-slate-100 last:border-b-0 hover:bg-cyan-50/30">
+                        <button
+                          onClick={() => onOpenProject(project)}
+                          className="sticky left-0 z-20 flex shrink-0 flex-col justify-center bg-white px-5 text-left hover:bg-cyan-50/40"
+                          style={{ width: leftWidth, height: rowHeight }}
+                        >
+                          <span className="flex items-center gap-1.5 truncate text-sm font-semibold text-slate-900">
+                            {isOverdue && <AlertTriangle size={13} className="shrink-0 text-rose-500" />}
+                            <span className="truncate">{project.name}</span>
+                          </span>
+                          <span className="truncate text-xs text-slate-500">{project.owner || "Unassigned"}</span>
+                        </button>
+                        <div className="relative shrink-0" style={{ width: timelineWidth, height: rowHeight, ...gridBackground }}>
+                          <button
+                            onClick={() => onOpenProject(project)}
+                            title={`${project.name} · ${formatShortDate(project.dateRequested)} → ${formatShortDate(project.targetDate)}`}
+                            className={cx(
+                              "group absolute top-1/2 z-10 flex h-7 -translate-y-1/2 items-center rounded-lg px-2 text-xs font-medium text-white shadow-sm transition hover:brightness-95",
+                              palette.bar,
+                              isOverdue && "ring-2 ring-rose-300"
+                            )}
+                            style={{ left, width }}
+                          >
+                            <span className="truncate">{formatRelative(project.targetDate)}</span>
+                            <Flag size={12} className="ml-1 shrink-0 opacity-80" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {unscheduled.length > 0 && (
+        <Card className="p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <CalendarDays size={16} className="text-slate-400" />
+            <h3 className="text-sm font-semibold text-slate-900">Unscheduled</h3>
+            <span className="text-xs text-slate-500">No requested or target date set</span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {unscheduled.map((project) => (
+              <button
+                key={project.id}
+                onClick={() => onOpenProject(project)}
+                className="rounded-xl border border-dashed border-slate-200 p-3 text-left transition hover:border-[#0F7EA8] hover:bg-cyan-50/40"
+              >
+                <p className="truncate text-sm font-semibold text-slate-900">{project.name}</p>
+                <p className="mt-1 truncate text-xs text-slate-500">{project.stage} · {project.owner || "Unassigned"}</p>
+              </button>
+            ))}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function StagePanel({ title, description, children }) {
+  return (
+    <Card className="border-slate-150 bg-white p-6">
+      <div className="mb-4">
+        <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+        {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+      </div>
+      {children}
+    </Card>
+  );
+}
+
+function MiniTable({ columns, rows, emptyText = "No records." }) {
+  if (!rows.length) {
+    return <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">{emptyText}</div>;
+  }
+
+  const renderValue = (column, value) => {
+    if (!value) return "—";
+    if (column.key === "website") {
+      return (
+        <a href={value} target="_blank" rel="noreferrer" className="text-[#0F7EA8] underline decoration-slate-300 underline-offset-2">
+          {value}
+        </a>
+      );
+    }
+    return value;
+  };
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[760px] text-left text-sm">
+        <thead className="text-xs uppercase tracking-wide text-slate-500">
+          <tr className="border-b border-slate-200">
+            {columns.map((column) => (
+              <th key={column.key} className="px-3 py-3 font-semibold">{column.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.map((row, index) => (
+            <tr key={row.number || row.vendorName || index} className="align-top">
+              {columns.map((column) => (
+                <td key={column.key} className="px-3 py-3 text-slate-700">{renderValue(column, row[column.key])}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ProjectDetail({ project, decisions, onClose, onEdit, onDelete, onAdvanceStage }) {
+  if (!project) return null;
+  const relatedDecisions = decisions.filter((decision) => decision.project === project.name && decision.status !== "Closed");
+  const upcoming = nextStage(project.stage);
+  const health = getProjectHealth(project);
+  const [activeStageTab, setActiveStageTab] = useState(project.stage);
+
+  useEffect(() => {
+    setActiveStageTab(project.stage);
+  }, [project.id, project.stage]);
+
+  const stageIndex = stages.indexOf(project.stage);
+  const activeStageIndex = stages.indexOf(activeStageTab);
+  const decisionGuide = getStageDecisionGuide(project, activeStageTab, relatedDecisions);
+  const stageCompletion = getStageCompletion(project, activeStageTab);
+  const vendorLeaderboard = getVendorLeaderboard(project);
+
+  const stageCards = {
+    "Problem Articulation": (
+      <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <StagePanel title="Problem statement">
+            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.problem || "Not provided."}</p>
+          </StagePanel>
+          <StagePanel title="Impact">
+            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.impact || "Not provided."}</p>
+          </StagePanel>
+          <StagePanel title="Financial impact">
+            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.financialImpact || "Not provided."}</p>
+          </StagePanel>
+          <StagePanel title="Objectives">
+            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.objectivePrimary || "Not provided."}</p>
+            {project.objectiveSecondary && <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{project.objectiveSecondary}</p>}
+          </StagePanel>
+        </div>
+        <StagePanel title="Discovery context" description="Business ownership and request origin for the problem statement.">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Business stakeholder</p>
+              <p className="mt-2 text-sm text-slate-800">{project.stakeholderName || "Not provided."}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Date requested</p>
+              <p className="mt-2 text-sm text-slate-800">{project.dateRequested || "Not provided."}</p>
+            </div>
+          </div>
+        </StagePanel>
+      </div>
+    ),
+    "Scouting": (
+      <div className="space-y-4">
+        <StagePanel title="Current state" description="How the problem is handled today and where the gaps are.">
+          <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.currentChallenges || "Not provided."}</p>
+        </StagePanel>
+        <div className="grid gap-4 md:grid-cols-2">
+          <StagePanel title="Previous solutions tested">
+            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.previousSolutions || "Not provided."}</p>
+          </StagePanel>
+          <StagePanel title="Blockers">
+            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.blockers || "Not provided."}</p>
+          </StagePanel>
+        </div>
+        <StagePanel title="Scouting notes">
+          <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.notes || "No notes recorded."}</p>
+        </StagePanel>
+        <StagePanel title="Vendor curated list" description="Longlist of vendors reviewed during scouting.">
+          <MiniTable
+            columns={[
+              { key: "number", label: "#" },
+              { key: "vendorName", label: "Vendor" },
+              { key: "cluster", label: "Cluster" },
+              { key: "origin", label: "Origin" },
+              { key: "fundingRound", label: "Funding" },
+              { key: "website", label: "Website" },
+            ]}
+            rows={project.curatedVendors || []}
+            emptyText="No curated vendor list yet."
+          />
+        </StagePanel>
+        <StagePanel title="Top vendor selection" description="Shortlisted vendors taken forward for partner outreach.">
+          <MiniTable
+            columns={[
+              { key: "number", label: "#" },
+              { key: "vendorName", label: "Vendor" },
+              { key: "contactName", label: "Contact" },
+              { key: "role", label: "Role" },
+              { key: "contactReceived", label: "Contact received" },
+              { key: "formSent", label: "Form sent" },
+              { key: "formReceived", label: "Form received" },
+            ]}
+            rows={project.selectedVendors || []}
+            emptyText="No shortlisted vendors yet."
+          />
+        </StagePanel>
+        <StagePanel title="Vendors selected for demo" description="Commercial and qualitative observations from the demo shortlist.">
+          <MiniTable
+            columns={[
+              { key: "number", label: "#" },
+              { key: "vendorName", label: "Vendor" },
+              { key: "demoDate", label: "Demo date" },
+              { key: "plus", label: "+" },
+              { key: "minus", label: "-" },
+              { key: "pocCost", label: "PoC cost" },
+              { key: "deploymentCost", label: "Deployment cost" },
+            ]}
+            rows={project.demoVendors || []}
+            emptyText="No demo vendors yet."
+          />
+        </StagePanel>
+        <StagePanel title="Vendor ranking" description="Scored comparison of the serious candidates for partner selection.">
+          <MiniTable
+            columns={[
+              { key: "vendorName", label: "Vendor" },
+              { key: "score", label: "Score / 5" },
+              { key: "strategicFit", label: "Strategic" },
+              { key: "speedToValue", label: "Speed" },
+              { key: "commercialFit", label: "Commercial" },
+              { key: "notes", label: "Notes" },
+            ]}
+            rows={vendorLeaderboard}
+            emptyText="No vendor scorecards yet."
+          />
+        </StagePanel>
+      </div>
+    ),
+    "POC": (
+      <div className="space-y-4">
+        <StagePanel title="Target solution" description="What the proposed solution should deliver at proof-of-concept stage.">
+          <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.dreamScenario || "Not provided."}</p>
+        </StagePanel>
+        <div className="grid gap-4 md:grid-cols-2">
+          <StagePanel title="Resources required">
+            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.resourcesRequired || "Not provided."}</p>
+          </StagePanel>
+          <StagePanel title="Implementation risks">
+            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.implementationRisks || "Not provided."}</p>
+          </StagePanel>
+        </div>
+        <StagePanel title="Expected value">
+          <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.value || "Not provided."}</p>
+        </StagePanel>
+        <StagePanel title="Partner application assessment" description="Why this partner or route should move forward into proof of concept.">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Selected vendor</p>
+              <p className="mt-2 text-sm leading-6 text-slate-800">{project.selectedVendor || "Not selected."}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Recommendation</p>
+              <p className="mt-2 text-sm leading-6 text-slate-800">{project.recommendation || "Not provided."}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Strategic alignment</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.strategicAlignment || "Not provided."}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Time to market</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.timeToMarket || "Not provided."}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Capabilities fit</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.capabilitiesFit || "Not provided."}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Partner recommendation summary</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.partnerSummary || "Not provided."}</p>
+            </div>
+          </div>
+        </StagePanel>
+      </div>
+    ),
+    "Deployment Planning": (
+      <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <StagePanel title="Recommendation">
+            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.recommendation || "Not provided."}</p>
+          </StagePanel>
+          <StagePanel title="Next milestone">
+            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.nextMilestone || "Not provided."}</p>
+          </StagePanel>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <StagePanel title="Target date">
+            <p className="text-sm leading-6 text-slate-700">{project.targetDate || "Not provided."}</p>
+          </StagePanel>
+          <StagePanel title="Resources required">
+            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.resourcesRequired || "Not provided."}</p>
+          </StagePanel>
+        </div>
+        <StagePanel title="Deployment planning notes">
+          <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.notes || "No notes recorded."}</p>
+        </StagePanel>
+      </div>
+    ),
+    "Deployment Execution": (
+      <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <StagePanel title="Execution blockers">
+            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.blockers || "Not provided."}</p>
+          </StagePanel>
+          <StagePanel title="Current milestone">
+            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.nextMilestone || "Not provided."}</p>
+          </StagePanel>
+        </div>
+        <StagePanel title="Related decisions" description="Open decisions that affect execution progress.">
+          <div className="space-y-3">
+            {relatedDecisions.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">No open decisions linked to this project.</div>
+            ) : (
+              relatedDecisions.map((decision) => (
+                <div key={decision.id} className="rounded-2xl border border-slate-200 p-4">
+                  <p className="font-semibold text-slate-900">{decision.decision}</p>
+                  <p className="mt-1 text-sm text-slate-500">{decision.owner || "No owner"} · {formatRelative(decision.due)}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </StagePanel>
+      </div>
+    ),
+    "Measuring Success": (
+      <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <StagePanel title="Financial impact">
+            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.financialImpact || "Not provided."}</p>
+          </StagePanel>
+          <StagePanel title="Scalability vision">
+            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.scalabilityVision || "Not provided."}</p>
+          </StagePanel>
+        </div>
+        <StagePanel title="Expected value">
+          <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.value || "Not provided."}</p>
+        </StagePanel>
+        <StagePanel title="Outcome notes">
+          <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.notes || "No notes recorded."}</p>
+        </StagePanel>
+      </div>
+    ),
+  };
+
+  return (
+    <Modal title={project.name} subtitle="Project detail" onClose={onClose} fullscreen>
+      <div className="space-y-6 bg-[#fbfcfe] px-8 py-6">
+        <div className="mx-auto w-full max-w-[1600px] space-y-6">
+        <div className="flex flex-wrap gap-2">
+          <Badge tone={project.status}>{project.status}</Badge>
+          <Badge tone={project.priority}>{project.priority}</Badge>
+          <Badge>{project.stage}</Badge>
+          <Badge tone={health}>{health === "critical" ? "Needs action" : health === "watch" ? "Watch" : "Stable"}</Badge>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-4">
+          <Card className="border-slate-200/80 p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Owner</p>
+            <p className="mt-2 flex items-center gap-2 text-sm text-slate-900"><User size={16} className="text-[#0F7EA8]" />{project.owner}</p>
+          </Card>
+          <Card className="border-slate-200/80 p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Business function</p>
+            <p className="mt-2 text-sm text-slate-900">{project.businessFunction || "Not set"}</p>
+            <p className="mt-1 text-xs text-slate-500">{project.regionScope || "No primary region"}</p>
+          </Card>
+          <Card className="border-slate-200/80 p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Target date</p>
+            <p className="mt-2 flex items-center gap-2 text-sm text-slate-900"><CalendarDays size={16} className="text-[#0F7EA8]" />{project.targetDate || "No date"}</p>
+            <p className="mt-1 text-xs text-slate-500">{formatRelative(project.targetDate)}</p>
+          </Card>
+          <Card className="border-slate-200/80 p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Recommendation</p>
+            <p className="mt-2 flex items-center gap-2 text-sm text-slate-900"><Flag size={16} className="text-[#0F7EA8]" />{project.recommendation}</p>
+          </Card>
+        </div>
+
+        <Card className="overflow-hidden border-slate-200/80 bg-white">
+          <div className="border-b border-slate-200 bg-white px-6 py-5">
+            <div className="flex gap-2 overflow-x-auto">
+              {stages.map((stage, index) => {
+                const isCurrent = stage === project.stage;
+                const isActive = stage === activeStageTab;
+                const isComplete = index < stageIndex;
+                return (
+                  <button
+                    key={stage}
+                    type="button"
+                    onClick={() => setActiveStageTab(stage)}
+                    className={cx(
+                      "inline-flex shrink-0 items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold transition",
+                      isActive
+                        ? "border-[#0F7EA8] bg-[#f7fbff] text-[#0F7EA8]"
+                        : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-900"
+                    )}
+                  >
+                    <span className={cx(
+                      "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
+                      isCurrent
+                        ? "bg-[#0F7EA8] text-white"
+                        : isComplete
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-slate-100 text-slate-500"
+                    )}>
+                      {index + 1}
+                    </span>
+                    <span className="whitespace-nowrap">{stage}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="border-b border-slate-200 bg-slate-50/40 px-6 py-5">
+            <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-[#0F7EA8]">Workflow stage</p>
+                <h3 className="mt-1 text-2xl font-semibold text-slate-900">{activeStageTab}</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  {activeStageIndex < stageIndex
+                    ? "Completed stage"
+                    : activeStageIndex === stageIndex
+                      ? "Current stage"
+                      : "Upcoming stage"}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-500">
+                  Step {activeStageIndex + 1} of {stages.length}
+                </div>
+                <div className="min-w-[160px]">
+                  <div className="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <span>Completion</span>
+                    <span>{stageCompletion.completed}/{stageCompletion.total}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-200">
+                    <div className="h-2 rounded-full bg-[#0F7EA8]" style={{ width: `${stageCompletion.percent}%` }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="p-6">
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+              <div>
+                {stageCards[activeStageTab]}
+              </div>
+              <div className="space-y-4">
+                <Card className="border-slate-200/80 bg-slate-50/60 p-6">
+                  <p className="text-sm font-semibold text-[#0F7EA8]">Decision guide</p>
+                  <h4 className="mt-2 text-xl font-semibold text-slate-900">{decisionGuide.title}</h4>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{decisionGuide.decision}</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Badge tone={decisionGuide.readiness === "Ready" ? "stable" : decisionGuide.readiness === "Needs review" ? "watch" : "critical"}>
+                      {decisionGuide.readiness}
+                    </Badge>
+                    <Badge tone={decisionGuide.openDecisionCount > 0 ? "Amber" : "default"}>
+                      {decisionGuide.openDecisionCount} open decision{decisionGuide.openDecisionCount === 1 ? "" : "s"}
+                    </Badge>
+                  </div>
+                </Card>
+
+                <Card className="border-slate-200/80 p-6">
+                  <p className="text-sm font-semibold text-slate-900">Readiness check</p>
+                  {decisionGuide.missing.length === 0 ? (
+                    <p className="mt-3 text-sm leading-6 text-emerald-700">The key inputs for this stage are in place.</p>
+                  ) : (
+                    <div className="mt-3">
+                      <p className="text-sm leading-6 text-slate-600">Complete these before advancing:</p>
+                      <ul className="mt-3 space-y-2 text-sm text-slate-700">
+                        {decisionGuide.missing.map((item) => (
+                          <li key={item} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </Card>
+
+                <Card className="border-slate-200/80 p-6">
+                  <p className="text-sm font-semibold text-slate-900">Recommended action</p>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    {activeStageTab === project.stage && upcoming
+                      ? `If this stage is complete, advance the project to ${upcoming}.`
+                      : activeStageIndex < stageIndex
+                        ? "This stage is already complete. Review it only if context needs to be revisited."
+                        : "Use this stage to prepare the next workflow step and confirm the required inputs."}
+                  </p>
+                </Card>
+
+                <Card className="border-slate-200/80 p-6">
+                  <p className="text-sm font-semibold text-slate-900">Activity</p>
+                  <div className="mt-3 space-y-3">
+                    {(project.activity || []).length === 0 ? (
+                      <p className="text-sm leading-6 text-slate-500">No activity recorded yet.</p>
+                    ) : (
+                      project.activity.slice(0, 6).map((entry) => (
+                        <div key={entry.id} className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                          <p className="text-sm font-medium text-slate-800">{entry.text}</p>
+                          <p className="mt-1 text-xs text-slate-500">{new Date(entry.at).toLocaleString()}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </Card>
+              </div>
+            </div>
+          </div>
+        </Card>
+        </div>
+      </div>
+      <div className="sticky bottom-0 border-t border-slate-200 bg-white/98 px-8 py-4 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-[1600px] flex-wrap items-center justify-between gap-3">
+        <Button variant="danger" className="rounded-full px-5" onClick={() => onDelete(project.id)}>Delete</Button>
+        <div className="flex flex-wrap gap-2">
+          {activeStageIndex > 0 && (
+            <Button variant="secondary" className="rounded-full px-5" onClick={() => setActiveStageTab(stages[activeStageIndex - 1])}>
+              Previous
+            </Button>
+          )}
+          {activeStageIndex < stages.length - 1 && (
+            <Button variant="secondary" className="rounded-full px-5" onClick={() => setActiveStageTab(stages[activeStageIndex + 1])}>
+              Next
+              <ChevronRight size={16} />
+            </Button>
+          )}
+          {activeStageTab === project.stage && upcoming && (
+            <Button className="rounded-full px-5" onClick={() => onAdvanceStage(project.id)}>
+              Advance to {upcoming}
+            </Button>
+          )}
+          <Button variant="secondary" className="rounded-full px-5" onClick={() => onEdit(project)}>Edit</Button>
+          <Button variant="secondary" className="rounded-full px-5" onClick={onClose}>Close</Button>
+        </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function DecisionsView({ decisions, onAdd, onEdit, onDelete }) {
+  const sorted = decisions.slice().sort((a, b) => (daysUntil(a.due) ?? 999) - (daysUntil(b.due) ?? 999));
+  return (
+    <div className="space-y-5">
+      <Card className="p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Decisions</h3>
+            <p className="text-sm text-slate-500">Approvals, escalations, and next-step decisions.</p>
+          </div>
+          <Button onClick={onAdd}><Plus size={16} /> New decision</Button>
+        </div>
+      </Card>
+
+      {sorted.length === 0 ? (
+        <EmptyState title="No decisions yet" text="Create a decision when a project needs approval, alignment, or a next step." action={<Button onClick={onAdd}><Plus size={16} /> New decision</Button>} />
+      ) : (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-5 py-3">Project</th>
+                  <th className="px-5 py-3">Decision</th>
+                  <th className="px-5 py-3">Owner</th>
+                  <th className="px-5 py-3">Due</th>
+                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3">Recommendation</th>
+                  <th className="px-5 py-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {sorted.map((decision) => (
+                  <tr key={decision.id} className="hover:bg-cyan-50/30">
+                    <td className="px-5 py-4 font-medium text-slate-900">{decision.project}</td>
+                    <td className="px-5 py-4 text-slate-700">{decision.decision}</td>
+                    <td className="px-5 py-4 text-slate-700">{decision.owner || "—"}</td>
+                    <td className="px-5 py-4">
+                      <div className="text-slate-700">{decision.due || "—"}</div>
+                      <div className="mt-1 text-xs text-slate-500">{formatRelative(decision.due)}</div>
+                    </td>
+                    <td className="px-5 py-4"><Badge tone={decision.status === "Blocked" ? "Red" : decision.status === "Closed" ? "Completed" : "Amber"}>{decision.status}</Badge></td>
+                    <td className="px-5 py-4 text-slate-700">{decision.recommendation}</td>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-2">
+                        <Button variant="secondary" className="px-3 py-2 text-xs" onClick={() => onEdit(decision)}>Edit</Button>
+                        <Button variant="danger" className="px-3 py-2 text-xs" onClick={() => onDelete(decision.id)}>Delete</Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function AgentView({ messages, draft, onDraftChange, onSubmit, onRunSuggestion }) {
+  const suggestions = [
+    "Summarize portfolio",
+    "At-risk projects",
+    "Open Warehouse Safety",
+    "Set Cargo Insurance status to Red",
+    "Advance Customer Facing AI",
+  ];
+
+  return (
+    <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+      <Card className="p-6">
+        <p className="text-sm font-semibold text-[#0F7EA8]">Quick chat</p>
+        <h3 className="mt-1 text-xl font-semibold text-slate-900">AI workspace</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-500">
+          Ask about projects or update them directly from chat.
+        </p>
+        <div className="mt-5 space-y-3">
+          {suggestions.map((suggestion) => (
+            <button
+              key={suggestion}
+              type="button"
+              onClick={() => onRunSuggestion(suggestion)}
+              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:border-cyan-200 hover:bg-cyan-50/40"
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
+        <div className="mt-6 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+          <p className="font-semibold text-slate-800">Try asking</p>
+          <ul className="mt-3 space-y-2">
+            <li>Open a project</li>
+            <li>Change status or owner</li>
+            <li>Update target date or milestone</li>
+            <li>Advance a project</li>
+          </ul>
+        </div>
+      </Card>
+
+      <Card className="flex min-h-[700px] flex-col overflow-hidden">
+        <div className="border-b border-slate-200 px-6 py-5">
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl bg-cyan-50 p-3 text-[#0F7EA8]">
+              <Bot size={20} />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Quick chat</h3>
+              <p className="text-sm text-slate-500">Live access to projects and decisions.</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 space-y-4 overflow-y-auto bg-[#fbfcfe] px-6 py-6">
+          {messages.map((message) => (
+            <div key={message.id} className={cx("max-w-[80%] rounded-3xl px-4 py-3", message.role === "user" ? "ml-auto bg-[#0F7EA8] text-white" : "bg-white text-slate-800 border border-slate-200")}>
+              <p className="whitespace-pre-wrap text-sm leading-6">{message.text}</p>
+            </div>
+          ))}
+        </div>
+        <form onSubmit={onSubmit} className="border-t border-slate-200 bg-white p-4">
+          <div className="flex items-end gap-3">
+            <Textarea
+              value={draft}
+              onChange={(event) => onDraftChange(event.target.value)}
+              className="min-h-[88px]"
+              placeholder="Ask or update. Example: Set Warehouse Safety status to Green."
+            />
+            <Button type="submit" className="px-5">Run</Button>
+          </div>
+        </form>
+      </Card>
+    </div>
+  );
+}
+
+function SettingsView({ projects, decisions, lastSavedAt, isRemote, accountName, onImport, onExportJson, onExportCsv, onReset }) {
+  const fileRef = useRef(null);
+  return (
+    <div className="space-y-5">
+      <Card className="p-6">
+        <h3 className="text-lg font-semibold text-slate-900">Workspace data</h3>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+          {isRemote
+            ? "This workspace is stored in SharePoint and shared across the team. Export a snapshot anytime; bulk import and reset are disabled here to protect shared data."
+            : "Export the current workspace as JSON or CSV, or import a previous dataset."}
+        </p>
+        <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+          <p className="font-medium text-slate-800">
+            Storage: {isRemote ? "SharePoint (shared)" : "This browser (local)"}
+          </p>
+          {isRemote && accountName && <p className="mt-1">Signed in as {accountName}</p>}
+          <p className="mt-1">{projects.length} projects · {decisions.length} decisions</p>
+          <p className="mt-1">Last save: {lastSavedAt ? new Date(lastSavedAt).toLocaleString() : "Current session"}</p>
+        </div>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={onExportCsv}><Download size={16} /> Export CSV</Button>
+          <Button variant="secondary" onClick={onExportJson}><Download size={16} /> Backup JSON</Button>
+          {!isRemote && (
+            <>
+              <Button variant="secondary" onClick={() => fileRef.current?.click()}><Upload size={16} /> Import JSON</Button>
+              <Button variant="danger" onClick={onReset}>Reset sample data</Button>
+            </>
+          )}
+        </div>
+        <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={onImport} />
+      </Card>
+    </div>
+  );
+}
+
+function SignInScreen({ onSignIn }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+      <Card className="w-full max-w-md p-8 text-center shadow-sm">
+        <p className="text-sm font-semibold text-[#0F7EA8]">Innovation Portfolio Hub</p>
+        <h1 className="mt-2 text-2xl font-semibold text-slate-900">Sign in to continue</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-500">
+          This workspace is shared across the team and protected by your organization account.
+        </p>
+        <Button className="mt-6 w-full" onClick={onSignIn}>Sign in with Microsoft</Button>
+      </Card>
+    </div>
+  );
+}
+
+function FullScreenStatus({ title, detail, action, spinner = false, error = false }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+      <Card className="w-full max-w-md p-8 text-center shadow-sm">
+        <div className={cx("mx-auto flex h-12 w-12 items-center justify-center rounded-2xl", error ? "bg-rose-50 text-rose-600" : "bg-cyan-50 text-[#0F7EA8]")}>
+          {error ? <AlertTriangle size={22} /> : <RefreshCw size={22} className={spinner ? "animate-spin" : ""} />}
+        </div>
+        <h1 className="mt-4 text-xl font-semibold text-slate-900">{title}</h1>
+        {detail && <p className="mt-2 break-words text-sm leading-6 text-slate-500">{detail}</p>}
+        {action && <div className="mt-6 flex justify-center">{action}</div>}
+      </Card>
+    </div>
+  );
+}
+
+export default function App() {
+  const [view, setView] = useState("Portfolio");
+  const [projects, setProjects] = useState([]);
+  const [decisions, setDecisions] = useState([]);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [editingProject, setEditingProject] = useState(null);
+  const [editingDecision, setEditingDecision] = useState(null);
+  const [showProjectForm, setShowProjectForm] = useState(false);
+  const [showDecisionForm, setShowDecisionForm] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState(null);
+  const [agentDraft, setAgentDraft] = useState("");
+  const [agentMessages, setAgentMessages] = useState([
+    {
+      id: "agent-welcome",
+      role: "assistant",
+      text: "Quick chat is live. Ask about a project or tell me to update one.",
+    },
+  ]);
+
+  // Backend + auth lifecycle
+  const [dataStatus, setDataStatus] = useState("loading"); // loading | ready | error
+  const [bootError, setBootError] = useState(null);
+  const [syncError, setSyncError] = useState(null);
+  const [account, setAccount] = useState(null);
+  const [authChecked, setAuthChecked] = useState(!isRemoteBackend);
+
+  const seedSampleData = async () => {
+    const seededProjects = [];
+    for (const sample of sampleProjects) {
+      const normalized = normalizeProject(sample);
+      try {
+        seededProjects.push(await repository.createProject(normalized));
+      } catch {
+        seededProjects.push(normalized);
+      }
+    }
+    const seededDecisions = [];
+    for (const sample of sampleDecisions) {
+      const normalized = normalizeDecision(sample);
+      try {
+        seededDecisions.push(await repository.createDecision(normalized));
+      } catch {
+        seededDecisions.push(normalized);
+      }
+    }
+    return { projects: seededProjects, decisions: seededDecisions };
+  };
+
+  const loadWorkspace = async () => {
+    setDataStatus("loading");
+    setBootError(null);
+    try {
+      const data = await repository.load();
+      let projectList = (data.projects || []).map(normalizeProject);
+      let decisionList = (data.decisions || []).map(normalizeDecision);
+      if (projectList.length === 0 && decisionList.length === 0) {
+        const seeded = await seedSampleData();
+        projectList = seeded.projects.map(normalizeProject);
+        decisionList = seeded.decisions.map(normalizeDecision);
+      }
+      setProjects(projectList);
+      setDecisions(decisionList);
+      setSelectedProject(null);
+      setLastSavedAt(new Date().toISOString());
+      setDataStatus("ready");
+    } catch (error) {
+      setBootError(error instanceof Error ? error.message : String(error));
+      setDataStatus("error");
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (isRemoteBackend) {
+        try {
+          const acc = await initAuth();
+          if (cancelled) return;
+          setAccount(acc);
+          setAuthChecked(true);
+          if (!acc) return; // render the sign-in screen
+        } catch (error) {
+          if (cancelled) return;
+          setAuthChecked(true);
+          setBootError(error instanceof Error ? error.message : String(error));
+          setDataStatus("error");
+          return;
+        }
+      }
+      if (!cancelled) await loadWorkspace();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Persistence helpers — optimistic UI updates above, durable write here.
+  const reconcileRemoteId = (setter, saved) => {
+    if (!saved || !saved._spItemId) return;
+    setter((current) => current.map((item) => (item.id === saved.id ? { ...item, _spItemId: saved._spItemId } : item)));
+  };
+
+  const persistProject = async (record, isNew) => {
+    try {
+      const saved = isNew ? await repository.createProject(record) : await repository.updateProject(record);
+      reconcileRemoteId(setProjects, saved);
+      setSelectedProject((current) => (current && current.id === saved.id ? { ...current, _spItemId: saved._spItemId } : current));
+      setLastSavedAt(new Date().toISOString());
+      setSyncError(null);
+    } catch (error) {
+      setSyncError(`Could not save "${record.name}". ${error instanceof Error ? error.message : ""}`.trim());
+    }
+  };
+
+  const persistProjectDelete = async (record) => {
+    try {
+      await repository.deleteProject(record);
+      setLastSavedAt(new Date().toISOString());
+    } catch (error) {
+      setSyncError(`Could not delete "${record.name}". ${error instanceof Error ? error.message : ""}`.trim());
+    }
+  };
+
+  const persistDecision = async (record, isNew) => {
+    try {
+      const saved = isNew ? await repository.createDecision(record) : await repository.updateDecision(record);
+      reconcileRemoteId(setDecisions, saved);
+      setLastSavedAt(new Date().toISOString());
+      setSyncError(null);
+    } catch (error) {
+      setSyncError(`Could not save decision. ${error instanceof Error ? error.message : ""}`.trim());
+    }
+  };
+
+  const persistDecisionDelete = async (record) => {
+    try {
+      await repository.deleteDecision(record);
+      setLastSavedAt(new Date().toISOString());
+    } catch (error) {
+      setSyncError(`Could not delete decision. ${error instanceof Error ? error.message : ""}`.trim());
+    }
+  };
+
+  const signOut = async () => {
+    try {
+      await logout();
+    } catch {
+      setAccount(null);
+    }
+  };
+
+  const nav = [
+    { label: "Portfolio", icon: LayoutDashboard },
+    { label: "Roadmap", icon: CalendarDays },
+    { label: "Projects", icon: FolderKanban },
+    { label: "AI", icon: Bot },
+    { label: "Decisions", icon: ClipboardCheck },
+    { label: "Settings", icon: Settings },
+  ];
+
+  const appendAgentMessage = (role, text) => {
+    setAgentMessages((current) => [...current, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, role, text }]);
+  };
+
+  const patchProject = (projectId, patch, activityText) => {
+    let nextSelectedProject = null;
+    setProjects((current) => current.map((project) => {
+      if (project.id !== projectId) return project;
+      const updated = {
+        ...project,
+        ...patch,
+        updatedAt: new Date().toISOString(),
+        activity: activityText ? [createActivityEntry("agent", activityText), ...(project.activity || [])].slice(0, 30) : project.activity || [],
+      };
+      nextSelectedProject = updated;
+      return updated;
+    }));
+    setSelectedProject((current) => {
+      if (!current || current.id !== projectId) return current;
+      return nextSelectedProject || current;
+    });
+    if (nextSelectedProject) persistProject(nextSelectedProject, false);
+    return nextSelectedProject;
+  };
+
+  const saveProject = (project) => {
+    const previousName = editingProject?.name;
+    const previousProject = editingProject || projects.find((item) => item.id === project.id) || null;
+    const activity = [...(project.activity || previousProject?.activity || [])];
+
+    if (!previousProject) {
+      activity.unshift(createActivityEntry("create", "Project created."));
+    } else {
+      if (previousProject.stage !== project.stage) {
+        activity.unshift(createActivityEntry("stage", `Stage changed from ${previousProject.stage} to ${project.stage}.`));
+      }
+      if (previousProject.status !== project.status) {
+        activity.unshift(createActivityEntry("status", `Status changed from ${previousProject.status} to ${project.status}.`));
+      }
+      if (previousProject.recommendation !== project.recommendation) {
+        activity.unshift(createActivityEntry("recommendation", `Recommendation changed to ${project.recommendation}.`));
+      }
+      if ((previousProject.selectedVendor || "") !== (project.selectedVendor || "")) {
+        activity.unshift(createActivityEntry("vendor", project.selectedVendor ? `Selected vendor set to ${project.selectedVendor}.` : "Selected vendor cleared."));
+      }
+      if (previousProject.name !== project.name) {
+        activity.unshift(createActivityEntry("rename", `Project renamed from ${previousProject.name} to ${project.name}.`));
+      }
+      activity.unshift(createActivityEntry("save", "Project details updated."));
+    }
+
+    const nextProject = {
+      ...project,
+      activity: activity.slice(0, 30),
+    };
+
+    setProjects((current) => {
+      const exists = current.some((item) => item.id === nextProject.id);
+      return exists ? current.map((item) => (item.id === nextProject.id ? nextProject : item)) : [nextProject, ...current];
+    });
+    if (previousName && previousName !== nextProject.name) {
+      const renamed = decisions
+        .filter((decision) => decision.project === previousName)
+        .map((decision) => ({ ...decision, project: nextProject.name, updatedAt: new Date().toISOString() }));
+      setDecisions((current) => current.map((decision) => decision.project === previousName ? { ...decision, project: nextProject.name, updatedAt: new Date().toISOString() } : decision));
+      renamed.forEach((decision) => persistDecision(decision, false));
+    }
+    setShowProjectForm(false);
+    setEditingProject(null);
+    setSelectedProject(nextProject);
+    persistProject(nextProject, !previousProject);
+  };
+
+  const saveDecision = (decision) => {
+    const exists = decisions.some((item) => item.id === decision.id);
+    setDecisions((current) =>
+      exists ? current.map((item) => (item.id === decision.id ? decision : item)) : [decision, ...current]
+    );
+    setShowDecisionForm(false);
+    setEditingDecision(null);
+    persistDecision(decision, !exists);
+  };
+
+  const deleteDecision = (decisionId) => {
+    const decision = decisions.find((item) => item.id === decisionId);
+    if (!decision) return;
+    setDecisions((current) => current.filter((item) => item.id !== decisionId));
+    persistDecisionDelete(decision);
+  };
+
+  const updateProjectStatus = (projectId, status) => {
+    const project = projects.find((item) => item.id === projectId);
+    if (!project || project.status === status) return;
+    const updated = {
+      ...project,
+      status,
+      updatedAt: new Date().toISOString(),
+      activity: [createActivityEntry("status", `Status changed from ${project.status} to ${status}.`), ...(project.activity || [])].slice(0, 30),
+    };
+    setProjects((current) => current.map((item) => (item.id === projectId ? updated : item)));
+    setSelectedProject((current) => (current && current.id === projectId ? updated : current));
+    persistProject(updated, false);
+  };
+
+  const advanceProjectStage = (projectId) => {
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) return;
+
+    const missing = getStageRequirements(project.stage)
+      .filter(([key]) => !hasValue(project[key]))
+      .map(([, label]) => label);
+
+    if (missing.length) {
+      window.alert(`Cannot advance ${project.name} yet.\n\nComplete these first:\n- ${missing.join("\n- ")}`);
+      return;
+    }
+
+    const next = nextStage(project.stage);
+    if (!next) return;
+
+    const updated = {
+      ...project,
+      stage: next,
+      updatedAt: new Date().toISOString(),
+      activity: [createActivityEntry("stage", `Advanced from ${project.stage} to ${next}.`), ...(project.activity || [])].slice(0, 30),
+    };
+    setProjects((current) => current.map((item) => (item.id === projectId ? updated : item)));
+    setSelectedProject((current) => (current && current.id === projectId ? updated : current));
+    persistProject(updated, false);
+  };
+
+  const deleteProject = (projectId) => {
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) return;
+    const relatedDecisions = decisions.filter((decision) => decision.project === project.name);
+    setProjects((current) => current.filter((item) => item.id !== projectId));
+    setDecisions((current) => current.filter((decision) => decision.project !== project.name));
+    setSelectedProject(null);
+    persistProjectDelete(project);
+    relatedDecisions.forEach((decision) => persistDecisionDelete(decision));
+  };
+
+  const exportWorkspaceJson = () => {
+    saveJson("innovation-portfolio-backup.json", {
+      exportedAt: new Date().toISOString(),
+      projects,
+      decisions,
+    });
+  };
+
+  const importWorkspaceJson = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const next = hydrateImportedState(parsed);
+      if (repository.replaceAll) await repository.replaceAll(next);
+      setProjects(next.projects);
+      setDecisions(next.decisions);
+      setSelectedProject(null);
+      setShowProjectForm(false);
+      setShowDecisionForm(false);
+      setLastSavedAt(new Date().toISOString());
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Unable to import JSON.");
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  const reset = async () => {
+    const seedProjects = sampleProjects.map(normalizeProject);
+    const seedDecisions = sampleDecisions.map(normalizeDecision);
+    if (repository.replaceAll) await repository.replaceAll({ projects: seedProjects, decisions: seedDecisions });
+    setProjects(seedProjects);
+    setDecisions(seedDecisions);
+    setSelectedProject(null);
+    setLastSavedAt(new Date().toISOString());
+  };
+
+  const runAgent = (prompt) => {
+    const input = prompt.trim();
+    if (!input) return;
+
+    appendAgentMessage("user", input);
+
+    const normalized = input.toLowerCase();
+    const overdueProjects = projects.filter((project) => {
+      const days = daysUntil(project.targetDate);
+      return days !== null && days < 0;
+    });
+    const atRiskProjects = projects.filter((project) => ["Red", "Blocked"].includes(project.status));
+
+    if (/^(summarize|summary|portfolio summary|summarize the portfolio)/.test(normalized)) {
+      const topUrgent = projects
+        .map((project) => ({ ...project, health: getProjectHealth(project), due: daysUntil(project.targetDate) ?? 999 }))
+        .sort((a, b) => {
+          const order = { critical: 0, watch: 1, stable: 2 };
+          const byHealth = (order[a.health] ?? 9) - (order[b.health] ?? 9);
+          if (byHealth !== 0) return byHealth;
+          return a.due - b.due;
+        })
+        .slice(0, 3);
+      appendAgentMessage(
+        "assistant",
+        `Portfolio summary\n\nProjects: ${projects.length}\nOpen decisions: ${decisions.filter((decision) => decision.status !== "Closed").length}\nAt risk: ${atRiskProjects.length}\nOverdue: ${overdueProjects.length}\n\nTop priorities:\n${topUrgent.map((project) => `- ${project.name} · ${project.stage} · ${project.status} · ${formatRelative(project.targetDate)}`).join("\n") || "- None"}`
+      );
+      return;
+    }
+
+    if (/at risk|risk projects|blocked projects|red projects/.test(normalized)) {
+      appendAgentMessage(
+        "assistant",
+        atRiskProjects.length
+          ? `At-risk projects\n\n${atRiskProjects.map((project) => `- ${project.name} · ${project.status} · ${project.stage} · ${project.nextMilestone || "No next milestone"}`).join("\n")}`
+          : "There are no red or blocked projects right now."
+      );
+      return;
+    }
+
+    const openMatch = input.match(/(?:open|show|find)\s+(.+)/i);
+    if (openMatch && !/status to|priority to|owner to|target date to|recommendation to|next milestone to/i.test(normalized)) {
+      const project = findProjectByName(projects, openMatch[1]);
+      if (!project) {
+        appendAgentMessage("assistant", `I could not find a project matching "${openMatch[1]}".`);
+        return;
+      }
+      setSelectedProject(project);
+      appendAgentMessage("assistant", `Opened ${project.name}.\n\nStage: ${project.stage}\nStatus: ${project.status}\nOwner: ${project.owner}\nNext milestone: ${project.nextMilestone || "Not set"}`);
+      return;
+    }
+
+    const advanceMatch = input.match(/(?:advance|move forward)\s+(.+)/i);
+    if (advanceMatch) {
+      const project = findProjectByName(projects, advanceMatch[1]);
+      if (!project) {
+        appendAgentMessage("assistant", `I could not find a project matching "${advanceMatch[1]}".`);
+        return;
+      }
+      const missing = getStageRequirements(project.stage)
+        .filter(([key]) => !hasValue(project[key]))
+        .map(([, label]) => label);
+      const next = nextStage(project.stage);
+      if (!next) {
+        appendAgentMessage("assistant", `${project.name} is already at the final stage.`);
+        return;
+      }
+      if (missing.length) {
+        appendAgentMessage("assistant", `I did not advance ${project.name}.\n\nComplete these first:\n- ${missing.join("\n- ")}`);
+        return;
+      }
+      const updated = patchProject(project.id, { stage: next }, `Advanced from ${project.stage} to ${next} via workspace AI.`);
+      setSelectedProject(updated || project);
+      appendAgentMessage("assistant", `${project.name} advanced to ${next}.`);
+      return;
+    }
+
+    const projectPrefix = input.match(/^(?:set|update|change)\s+(.+?)\s+(status|priority|owner|target date|recommendation|next milestone)\s+to\s+(.+)$/i);
+    if (projectPrefix) {
+      const [, rawProjectName, rawField, rawValue] = projectPrefix;
+      const project = findProjectByName(projects, rawProjectName);
+      if (!project) {
+        appendAgentMessage("assistant", `I could not find a project matching "${rawProjectName}".`);
+        return;
+      }
+
+      const field = rawField.toLowerCase();
+      const value = rawValue.trim();
+      const patch = {};
+      let activityText = "";
+
+      if (field === "status") {
+        const valid = statuses.find((item) => item.toLowerCase() === value.toLowerCase());
+        if (!valid) {
+          appendAgentMessage("assistant", `Status must be one of: ${statuses.join(", ")}.`);
+          return;
+        }
+        patch.status = valid;
+        activityText = `Status changed from ${project.status} to ${valid} via workspace AI.`;
+      } else if (field === "priority") {
+        const valid = priorities.find((item) => item.toLowerCase() === value.toLowerCase());
+        if (!valid) {
+          appendAgentMessage("assistant", `Priority must be one of: ${priorities.join(", ")}.`);
+          return;
+        }
+        patch.priority = valid;
+        activityText = `Priority changed from ${project.priority} to ${valid} via workspace AI.`;
+      } else if (field === "owner") {
+        patch.owner = value;
+        activityText = `Owner changed from ${project.owner || "Unassigned"} to ${value} via workspace AI.`;
+      } else if (field === "target date") {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+          appendAgentMessage("assistant", "Target date must use YYYY-MM-DD format.");
+          return;
+        }
+        patch.targetDate = value;
+        activityText = `Target date changed to ${value} via workspace AI.`;
+      } else if (field === "recommendation") {
+        const valid = recommendations.find((item) => item.toLowerCase() === value.toLowerCase());
+        if (!valid) {
+          appendAgentMessage("assistant", `Recommendation must be one of: ${recommendations.join(", ")}.`);
+          return;
+        }
+        patch.recommendation = valid;
+        activityText = `Recommendation changed to ${valid} via workspace AI.`;
+      } else if (field === "next milestone") {
+        patch.nextMilestone = value;
+        activityText = `Next milestone updated to "${value}" via workspace AI.`;
+      }
+
+      const updated = patchProject(project.id, patch, activityText);
+      if (selectedProject?.id === project.id) setSelectedProject(updated || project);
+      appendAgentMessage("assistant", `Updated ${project.name}: ${rawField} set to ${value}.`);
+      return;
+    }
+
+    const statusQuery = input.match(/(?:status of|tell me about|summary of)\s+(.+)/i);
+    if (statusQuery) {
+      const project = findProjectByName(projects, statusQuery[1]);
+      if (!project) {
+        appendAgentMessage("assistant", `I could not find a project matching "${statusQuery[1]}".`);
+        return;
+      }
+      const leaderboard = getVendorLeaderboard(project);
+      const topVendor = leaderboard[0];
+      appendAgentMessage(
+        "assistant",
+        `${project.name}\n\nStage: ${project.stage}\nStatus: ${project.status}\nPriority: ${project.priority}\nOwner: ${project.owner}\nTarget date: ${project.targetDate || "Not set"} (${formatRelative(project.targetDate)})\nNext milestone: ${project.nextMilestone || "Not set"}\nRecommendation: ${project.recommendation}\nTop vendor: ${topVendor ? `${topVendor.vendorName} (${topVendor.score}/5)` : "No vendor scoring yet"}`
+      );
+      return;
+    }
+
+    appendAgentMessage(
+      "assistant",
+      "I can summarize the portfolio, show at-risk work, open a project, advance a project, or update fields like status, priority, owner, target date, recommendation, and next milestone."
+    );
+  };
+
+  const submitAgentPrompt = (event) => {
+    event.preventDefault();
+    const prompt = agentDraft;
+    setAgentDraft("");
+    runAgent(prompt);
+  };
+
+  if (isRemoteBackend && authChecked && !account) {
+    return <SignInScreen onSignIn={login} />;
+  }
+
+  if ((isRemoteBackend && !authChecked) || dataStatus === "loading") {
+    return (
+      <FullScreenStatus
+        title="Loading workspace…"
+        detail={isRemoteBackend ? "Connecting to SharePoint" : "Preparing your data"}
+        spinner
+      />
+    );
+  }
+
+  if (dataStatus === "error") {
+    return (
+      <FullScreenStatus
+        title="Could not load the workspace"
+        detail={bootError}
+        error
+        action={
+          <div className="flex gap-2">
+            <Button onClick={loadWorkspace}>Retry</Button>
+            {isRemoteBackend && <Button variant="secondary" onClick={signOut}>Sign out</Button>}
+          </div>
+        }
+      />
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="w-full px-4 py-6 lg:px-8">
+        {syncError && (
+          <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-2">
+              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+              <span>{syncError}</span>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="secondary" className="px-3 py-2 text-xs" onClick={loadWorkspace}>Reload from server</Button>
+              <Button variant="secondary" className="px-3 py-2 text-xs" onClick={() => setSyncError(null)}>Dismiss</Button>
+            </div>
+          </div>
+        )}
+        <header className="mb-6 flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-[#0F7EA8]">IPH</p>
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">Portfolio</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+              Manage active initiatives, decision flow, delivery risk, and milestone timing in one place.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {nav.map(({ label, icon: Icon }) => (
+              <button key={label} onClick={() => setView(label)} className={cx("inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition", view === label ? "bg-[#0F7EA8] text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200")}>
+                <Icon size={16} />
+                {label}
+              </button>
+            ))}
+            <Button onClick={() => { setEditingProject(null); setShowProjectForm(true); }}>
+              <Plus size={16} /> New project
+            </Button>
+            {isRemoteBackend && account && (
+              <div className="ml-1 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                <User size={14} className="text-[#0F7EA8]" />
+                <span className="max-w-[160px] truncate">{account.username || account.name}</span>
+                <button type="button" onClick={signOut} title="Sign out" className="rounded-lg p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">
+                  <LogOut size={14} />
+                </button>
+              </div>
+            )}
+          </div>
+        </header>
+
+        {view === "Portfolio" && (
+          <Overview projects={projects} decisions={decisions} onOpenProject={setSelectedProject} onSetView={setView} />
+        )}
+
+        {view === "Roadmap" && (
+          <RoadmapView
+            projects={projects}
+            onOpenProject={setSelectedProject}
+            onNewProject={() => { setEditingProject(null); setShowProjectForm(true); }}
+          />
+        )}
+
+        {view === "Projects" && (
+          <ProjectsView
+            projects={projects}
+            onOpenProject={setSelectedProject}
+            onNewProject={() => { setEditingProject(null); setShowProjectForm(true); }}
+            onAdvanceStage={advanceProjectStage}
+            onStatusChange={updateProjectStatus}
+          />
+        )}
+
+        {view === "AI" && (
+          <AgentView
+            messages={agentMessages}
+            draft={agentDraft}
+            onDraftChange={setAgentDraft}
+            onSubmit={submitAgentPrompt}
+            onRunSuggestion={runAgent}
+          />
+        )}
+
+        {view === "Decisions" && (
+          <DecisionsView
+            decisions={decisions}
+            onAdd={() => { setEditingDecision(null); setShowDecisionForm(true); }}
+            onEdit={(decision) => { setEditingDecision(decision); setShowDecisionForm(true); }}
+            onDelete={deleteDecision}
+          />
+        )}
+
+        {view === "Settings" && (
+          <SettingsView
+            projects={projects}
+            decisions={decisions}
+            lastSavedAt={lastSavedAt}
+            isRemote={isRemoteBackend}
+            accountName={account?.username || account?.name}
+            onImport={importWorkspaceJson}
+            onExportJson={exportWorkspaceJson}
+            onExportCsv={() => saveCsv("innovation-projects.csv", projects)}
+            onReset={reset}
+          />
+        )}
+      </div>
+
+      {selectedProject && (
+        <ProjectDetail
+          project={selectedProject}
+          decisions={decisions}
+          onClose={() => setSelectedProject(null)}
+          onEdit={(project) => { setEditingProject(project); setShowProjectForm(true); }}
+          onDelete={deleteProject}
+          onAdvanceStage={advanceProjectStage}
+        />
+      )}
+
+      {showProjectForm && (
+        <ProjectForm
+          project={editingProject}
+          onSave={saveProject}
+          onClose={() => { setShowProjectForm(false); setEditingProject(null); }}
+        />
+      )}
+
+      {showDecisionForm && (
+        <DecisionForm
+          decision={editingDecision}
+          projects={projects}
+          onSave={saveDecision}
+          onClose={() => { setShowDecisionForm(false); setEditingDecision(null); }}
+        />
+      )}
+    </div>
+  );
+}
