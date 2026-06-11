@@ -1,122 +1,95 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  BarChart3,
   Bot,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
+  CircleDollarSign,
   ClipboardCheck,
   Download,
   Flag,
+  FlaskConical,
   FolderKanban,
+  Kanban,
   LayoutDashboard,
+  ListChecks,
   LogOut,
   Plus,
   RefreshCw,
   Search,
   Settings,
+  Target,
+  Trash2,
   Upload,
   User,
-  X,
 } from "lucide-react";
+import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip } from "recharts";
 import { repository } from "./data/repository.js";
 import { isRemoteBackend } from "./config.js";
 import { initAuth, login, logout, getActiveAccount } from "./auth/msalClient.js";
+import {
+  stages,
+  statuses,
+  priorities,
+  products,
+  recommendations,
+  pocOutcomes,
+  stageMigrationMap,
+  recommendationMigrationMap,
+  STATUS_BAR,
+  emptyProject,
+  emptyDecision,
+} from "./lib/constants.js";
+import {
+  cx,
+  parseDate,
+  daysUntil,
+  formatRelative,
+  startOfDay,
+  startOfMonth,
+  addMonths,
+  monthsBetween,
+  formatShortDate,
+  dateToOffset,
+  getProjectHealth,
+  nextStage,
+  getStageDecisionGuide,
+  getStageRequirements,
+  hasValue,
+  createActivityEntry,
+  getVendorLeaderboard,
+  findProjectByName,
+  getStageCompletion,
+  getTaskProgress,
+  getPocCriteriaProgress,
+  formatAmount,
+  parseAmount,
+} from "./lib/utils.js";
+import {
+  Badge,
+  Card,
+  Button,
+  Input,
+  Textarea,
+  Select,
+  Field,
+  Modal,
+  MetricCard,
+  EmptyState,
+  StagePanel,
+  MiniTable,
+  EditableTable,
+} from "./components/ui.jsx";
+import BoardView from "./views/BoardView.jsx";
+import PocView from "./views/PocView.jsx";
+import AnalyticsView from "./views/AnalyticsView.jsx";
+import CommandPalette from "./components/CommandPalette.jsx";
 
 const STORAGE_KEYS = {
   projects: "iph_projects",
   decisions: "iph_decisions",
-};
-
-const stages = [
-  "Problem Articulation",
-  "Scouting",
-  "POC",
-  "Deployment Planning",
-  "Deployment Execution",
-  "Measuring Success",
-];
-
-const statuses = ["Green", "Amber", "Red", "Blocked", "Completed"];
-const priorities = ["Low", "Medium", "High", "Strategic"];
-const products = ["Cargo Insurance", "Value Protect", "Customs", "Routing", "Forwarding", "CRM", "AI Literacy", "Network Optimization", "Other"];
-const recommendations = [
-  "Continue Articulation",
-  "Prioritize for Scouting",
-  "Continue Scouting",
-  "Select for PoC",
-  "Iterate PoC",
-  "Graduate to Deployment",
-  "Park",
-  "Kill",
-];
-
-const stageMigrationMap = {
-  Idea: "Problem Articulation",
-  Discovery: "Problem Articulation",
-  Qualification: "Scouting",
-  PoC: "POC",
-  Pilot: "Deployment Planning",
-  Scale: "Deployment Execution",
-  Closed: "Measuring Success",
-};
-
-const recommendationMigrationMap = {
-  "Continue Discovery": "Continue Articulation",
-  "Move to PoC": "Select for PoC",
-  "Move to Pilot": "Graduate to Deployment",
-  Scale: "Graduate to Deployment",
-};
-
-const emptyProject = {
-  name: "",
-  productArea: "AI Literacy",
-  owner: "",
-  dateRequested: "",
-  businessFunction: "",
-  stakeholderName: "",
-  regionScope: "",
-  stage: "Problem Articulation",
-  status: "Green",
-  priority: "Medium",
-  targetDate: "",
-  nextMilestone: "",
-  recommendation: "Continue Articulation",
-  problem: "",
-  impact: "",
-  financialImpact: "",
-  objectivePrimary: "",
-  objectiveSecondary: "",
-  currentChallenges: "",
-  previousSolutions: "",
-  dreamScenario: "",
-  implementationRisks: "",
-  resourcesRequired: "",
-  scalabilityVision: "",
-  curatedVendors: [],
-  selectedVendors: [],
-  demoVendors: [],
-  vendorEvaluations: [],
-  selectedVendor: "",
-  strategicAlignment: "",
-  timeToMarket: "",
-  capabilitiesFit: "",
-  partnerSummary: "",
-  value: "",
-  blockers: "",
-  notes: "",
-  activity: [],
-};
-
-const emptyDecision = {
-  project: "",
-  decision: "",
-  owner: "",
-  due: "",
-  recommendation: "Continue Articulation",
-  finalDecision: "Pending",
-  status: "Open",
-  notes: "",
 };
 
 const sampleProjects = [
@@ -149,6 +122,10 @@ const sampleProjects = [
     value: "Better event visibility, faster intervention, lower incident frequency, and stronger safety governance.",
     blockers: "Baseline event quality and financial impact data are still fragmented.",
     notes: "Derived from the warehouse safety / security discovery form example with regional applicability for NAM and broader rollout potential.",
+    tasks: [
+      { id: "wsd-t1", title: "Confirm pilot site shortlist with NAM ops", owner: "Maurice Simpson", due: "2026-06-12", done: false },
+      { id: "wsd-t2", title: "Pull 12-month AFR / IFIR baseline data", owner: "Safety Analytics", due: "2026-06-19", done: false },
+    ],
   },
   {
     id: 2,
@@ -197,6 +174,24 @@ const sampleProjects = [
     value: "Higher quality decisions in network planning and potential cost reduction.",
     blockers: "Need clean scenario data and accepted baseline metrics.",
     notes: "Pilot lane approval needed after benchmark.",
+    selectedVendor: "Internal OR Platform",
+    pocHypothesis: "An AI-assisted scenario engine can cut network planning evaluation time by 60% while matching expert planner quality on cost and service trade-offs.",
+    pocSuccessCriteria: [
+      { id: "noa-c1", text: "Benchmark scenario completes in under 4 hours vs 2-day baseline", met: true },
+      { id: "noa-c2", text: "Cost recommendations within 2% of expert planner output", met: true },
+      { id: "noa-c3", text: "Planners rate usability 4/5 or higher in structured feedback", met: false },
+      { id: "noa-c4", text: "Scenario data pipeline refreshes without manual cleanup", met: false },
+    ],
+    pocStartDate: "2026-04-20",
+    pocEndDate: "2026-07-15",
+    pocBudget: "40000",
+    pocSpend: "16500",
+    pocOutcome: "Pending",
+    tasks: [
+      { id: "noa-t1", title: "Lock benchmark scenario dataset", owner: "OR Team", due: "2026-06-05", done: true },
+      { id: "noa-t2", title: "Run side-by-side planner comparison", owner: "OR Team", due: "2026-06-20", done: false },
+      { id: "noa-t3", title: "Collect planner usability feedback", owner: "OR Team", due: "2026-06-28", done: false },
+    ],
   },
   {
     id: 5,
@@ -286,6 +281,12 @@ const sampleProjects = [
     value: "Higher retention, lower support friction, stronger customer experience, and a reusable AI capability for customs services.",
     blockers: "Solution architecture, data readiness, and cross-functional execution ownership are not yet locked.",
     notes: "Derived from the Customs Services discovery sheet for the Customer Facing Conversational AI case.",
+    pocBudget: "25000",
+    tasks: [
+      { id: "cca-t1", title: "Validate churn exposure with NAM account teams", owner: "Nicoloe Stojeski", due: "2026-06-18", done: true },
+      { id: "cca-t2", title: "Define V1 Track pilot scope", owner: "Customs Product", due: "2026-06-25", done: false },
+      { id: "cca-t3", title: "Align security review for Pedestal AI", owner: "Cyber Risk", due: "2026-07-02", done: false },
+    ],
   },
 ];
 
@@ -325,10 +326,6 @@ function normalizeDecision(item) {
   return { ...emptyDecision, ...item };
 }
 
-function cx(...classes) {
-  return classes.filter(Boolean).join(" ");
-}
-
 function saveJson(name, payload) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" }));
   const link = document.createElement("a");
@@ -362,412 +359,136 @@ function hydrateImportedState(raw) {
   };
 }
 
-function parseDate(value) {
-  if (!value) return null;
-  const date = new Date(`${value}T00:00:00`);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
+function SuccessCriteriaEditor({ criteria, onChange }) {
+  const [draft, setDraft] = useState("");
 
-function daysUntil(value) {
-  const date = parseDate(value);
-  if (!date) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return Math.round((date.getTime() - today.getTime()) / 86400000);
-}
-
-function formatRelative(value) {
-  const days = daysUntil(value);
-  if (days === null) return "No date";
-  if (days < 0) return `${Math.abs(days)}d overdue`;
-  if (days === 0) return "Due today";
-  if (days === 1) return "Due tomorrow";
-  return `Due in ${days}d`;
-}
-
-function startOfDay(date) {
-  const next = new Date(date);
-  next.setHours(0, 0, 0, 0);
-  return next;
-}
-
-function startOfMonth(date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-
-function addMonths(date, count) {
-  return new Date(date.getFullYear(), date.getMonth() + count, 1);
-}
-
-function monthsBetween(start, end) {
-  return (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
-}
-
-function formatShortDate(value) {
-  const date = parseDate(value);
-  if (!date) return "—";
-  return date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-}
-
-// Maps a date onto an x offset where each month occupies exactly monthWidth px,
-// so bars stay aligned with the uniform month gridlines regardless of month length.
-function dateToOffset(date, rangeStart, monthWidth) {
-  const monthIndex = monthsBetween(rangeStart, date);
-  const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  const fraction = (date.getDate() - 1) / daysInMonth;
-  return (monthIndex + fraction) * monthWidth;
-}
-
-const STATUS_BAR = {
-  Green: { bar: "bg-emerald-500", soft: "bg-emerald-100", text: "text-emerald-700" },
-  Amber: { bar: "bg-amber-500", soft: "bg-amber-100", text: "text-amber-700" },
-  Red: { bar: "bg-rose-500", soft: "bg-rose-100", text: "text-rose-700" },
-  Blocked: { bar: "bg-slate-500", soft: "bg-slate-200", text: "text-slate-700" },
-  Completed: { bar: "bg-sky-500", soft: "bg-sky-100", text: "text-sky-700" },
-};
-
-function getProjectHealth(project) {
-  const days = daysUntil(project.targetDate);
-  if (project.status === "Blocked" || project.status === "Red") return "critical";
-  if (days !== null && days < 0) return "critical";
-  if (days !== null && days <= 7) return "watch";
-  return "stable";
-}
-
-function nextStage(stage) {
-  const index = stages.indexOf(stage);
-  if (index < 0 || index >= stages.length - 1) return null;
-  return stages[index + 1];
-}
-
-function getStageDecisionGuide(project, stage, relatedDecisions) {
-  const guides = {
-    "Problem Articulation": {
-      title: "Can this move into scouting?",
-      decision: "Confirm the problem is specific, material, and owned by the business.",
-      required: [
-        ["problem", "Problem statement"],
-        ["impact", "Operational impact"],
-        ["financialImpact", "Financial impact"],
-        ["objectivePrimary", "Primary objective"],
-      ],
-    },
-    "Scouting": {
-      title: "Is the opportunity ready for solution scouting?",
-      decision: "Validate the current state, failure points, and why existing approaches are insufficient.",
-      required: [
-        ["currentChallenges", "Current challenges"],
-        ["previousSolutions", "Previous solutions tested"],
-        ["blockers", "Key blockers"],
-      ],
-    },
-    "POC": {
-      title: "Is this ready for a proof of concept?",
-      decision: "Confirm the target solution, risks, and what support is needed to run a focused test.",
-      required: [
-        ["dreamScenario", "Target solution"],
-        ["resourcesRequired", "Resources required"],
-        ["implementationRisks", "Implementation risks"],
-        ["value", "Expected value"],
-      ],
-    },
-    "Deployment Planning": {
-      title: "Can this transition into implementation planning?",
-      decision: "Lock the recommendation, target timeline, and operational milestone for rollout.",
-      required: [
-        ["recommendation", "Recommendation"],
-        ["nextMilestone", "Next milestone"],
-        ["targetDate", "Target date"],
-      ],
-    },
-    "Deployment Execution": {
-      title: "Is execution under control?",
-      decision: "Monitor whether blockers, milestones, and open approvals are under active management.",
-      required: [
-        ["blockers", "Execution blockers"],
-        ["nextMilestone", "Current milestone"],
-      ],
-    },
-    "Measuring Success": {
-      title: "Can the outcome be measured and scaled?",
-      decision: "Confirm the realized value, financial impact, and scale pathway after delivery.",
-      required: [
-        ["financialImpact", "Financial impact"],
-        ["scalabilityVision", "Scalability vision"],
-        ["value", "Expected value"],
-      ],
-    },
-  };
-
-  const guide = guides[stage];
-  const missing = guide.required.filter(([key]) => !String(project[key] || "").trim()).map(([, label]) => label);
-  const readiness = missing.length === 0 ? "Ready" : missing.length <= 2 ? "Needs review" : "Not ready";
-
-  return {
-    ...guide,
-    missing,
-    readiness,
-    openDecisionCount: relatedDecisions.length,
-  };
-}
-
-function getStageRequirements(stage) {
-  const requirements = {
-    "Problem Articulation": [
-      ["name", "Project name"],
-      ["owner", "Owner"],
-      ["problem", "Problem statement"],
-      ["impact", "Operational impact"],
-      ["objectivePrimary", "Primary objective"],
-    ],
-    "Scouting": [
-      ["currentChallenges", "Current challenges"],
-      ["previousSolutions", "Previous solutions tested"],
-      ["curatedVendors", "Vendor longlist"],
-      ["selectedVendors", "Shortlisted vendors"],
-      ["vendorEvaluations", "Vendor scorecards"],
-    ],
-    "POC": [
-      ["dreamScenario", "Target solution"],
-      ["selectedVendor", "Selected vendor"],
-      ["implementationRisks", "Implementation risks"],
-      ["partnerSummary", "Partner recommendation summary"],
-    ],
-    "Deployment Planning": [
-      ["recommendation", "Recommendation"],
-      ["targetDate", "Target date"],
-      ["nextMilestone", "Next milestone"],
-    ],
-    "Deployment Execution": [
-      ["status", "Execution status"],
-      ["blockers", "Execution blockers"],
-      ["nextMilestone", "Current milestone"],
-    ],
-    "Measuring Success": [
-      ["value", "Outcome value"],
-      ["financialImpact", "Financial impact"],
-      ["scalabilityVision", "Scalability vision"],
-    ],
-  };
-  return requirements[stage] || [];
-}
-
-function hasValue(value) {
-  if (Array.isArray(value)) return value.length > 0;
-  return String(value || "").trim().length > 0;
-}
-
-function createActivityEntry(type, text) {
-  return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    type,
-    text,
-    at: new Date().toISOString(),
-  };
-}
-
-function scoreVendorEvaluation(evaluation) {
-  const keys = ["strategicFit", "logisticsFit", "integrationFit", "securityReadiness", "speedToValue", "commercialFit"];
-  const values = keys.map((key) => Number(evaluation?.[key] || 0)).filter((value) => value > 0);
-  if (!values.length) return null;
-  const total = values.reduce((sum, value) => sum + value, 0);
-  return Number((total / values.length).toFixed(1));
-}
-
-function getVendorLeaderboard(project) {
-  return (project.vendorEvaluations || [])
-    .map((evaluation) => ({
-      ...evaluation,
-      score: scoreVendorEvaluation(evaluation),
-    }))
-    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-}
-
-function normalizeText(value) {
-  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
-
-function findProjectByName(projects, query) {
-  const target = normalizeText(query);
-  if (!target) return null;
-
-  const exact = projects.find((project) => normalizeText(project.name) === target);
-  if (exact) return exact;
-
-  const partial = projects.find((project) => normalizeText(project.name).includes(target) || target.includes(normalizeText(project.name)));
-  return partial || null;
-}
-
-function getStageCompletion(project, stage) {
-  const required = getStageRequirements(stage);
-  const completed = required.filter(([key]) => hasValue(project[key])).length;
-  const total = required.length;
-  return {
-    completed,
-    total,
-    percent: total ? Math.round((completed / total) * 100) : 0,
-  };
-}
-
-function Badge({ children, tone = "default" }) {
-  const styles = {
-    Green: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    Amber: "border-amber-200 bg-amber-50 text-amber-700",
-    Red: "border-rose-200 bg-rose-50 text-rose-700",
-    Blocked: "border-slate-300 bg-slate-100 text-slate-700",
-    Completed: "border-sky-200 bg-sky-50 text-sky-700",
-    Strategic: "border-cyan-200 bg-cyan-50 text-cyan-800",
-    High: "border-orange-200 bg-orange-50 text-orange-700",
-    Medium: "border-sky-200 bg-sky-50 text-sky-700",
-    Low: "border-slate-200 bg-slate-50 text-slate-600",
-    critical: "border-rose-200 bg-rose-50 text-rose-700",
-    watch: "border-amber-200 bg-amber-50 text-amber-700",
-    stable: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    default: "border-slate-200 bg-white text-slate-600",
-  };
-  return <span className={cx("inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium", styles[tone] || styles.default)}>{children}</span>;
-}
-
-function Card({ className = "", children }) {
-  return <div className={cx("rounded-2xl border border-slate-200 bg-white", className)}>{children}</div>;
-}
-
-function Button({ children, variant = "primary", className = "", ...props }) {
-  const styles = {
-    primary: "bg-[#0F7EA8] text-white hover:bg-[#0a6b90]",
-    secondary: "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
-    danger: "border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100",
-  };
-  return <button className={cx("inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition", styles[variant], className)} {...props}>{children}</button>;
-}
-
-function Input({ className = "", ...props }) {
-  return <input {...props} className={cx("h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-[#0F7EA8] focus:ring-4 focus:ring-cyan-100", className)} />;
-}
-
-function Textarea({ className = "", ...props }) {
-  return <textarea {...props} className={cx("min-h-24 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-[#0F7EA8] focus:ring-4 focus:ring-cyan-100", className)} />;
-}
-
-function Select({ options, className = "", ...props }) {
-  return <select {...props} className={cx("h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-[#0F7EA8] focus:ring-4 focus:ring-cyan-100", className)}>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select>;
-}
-
-function Field({ label, children, wide = false }) {
-  return <label className={wide ? "md:col-span-2" : "block"}><span className="text-sm font-medium text-slate-700">{label}</span><div className="mt-1.5">{children}</div></label>;
-}
-
-function EditableTable({ title, description, columns, rows, onChange, createRow }) {
-  const updateCell = (rowIndex, key, value) => {
-    onChange(rows.map((row, index) => (index === rowIndex ? { ...row, [key]: value } : row)));
-  };
-
-  const removeRow = (rowIndex) => {
-    onChange(rows.filter((_, index) => index !== rowIndex));
-  };
-
-  const addRow = () => {
-    onChange([...rows, createRow(rows.length)]);
+  const add = () => {
+    const text = draft.trim();
+    if (!text) return;
+    onChange([...criteria, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, text, met: false }]);
+    setDraft("");
   };
 
   return (
-    <StagePanel title={title} description={description}>
-      <div className="space-y-4">
-        {rows.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-500">
-            No entries yet. Add the first row to capture this stage properly.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {rows.map((row, rowIndex) => (
-              <div key={rowIndex} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold text-slate-900">Row {rowIndex + 1}</p>
-                  <Button type="button" variant="secondary" className="px-3 py-2 text-xs" onClick={() => removeRow(rowIndex)}>
-                    Remove
-                  </Button>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  {columns.map((column) => (
-                    <Field key={column.key} label={column.label} wide={column.wide}>
-                      {column.type === "textarea" ? (
-                        <Textarea
-                          value={row[column.key] || ""}
-                          onChange={(event) => updateCell(rowIndex, column.key, event.target.value)}
-                          className={column.className}
-                        />
-                      ) : (
-                        <Input
-                          value={row[column.key] || ""}
-                          onChange={(event) => updateCell(rowIndex, column.key, event.target.value)}
-                          placeholder={column.placeholder}
-                        />
-                      )}
-                    </Field>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        <Button type="button" variant="secondary" onClick={addRow}>
-          <Plus size={16} /> Add row
-        </Button>
-      </div>
-    </StagePanel>
-  );
-}
-
-function Modal({ title, subtitle, onClose, children, width = "max-w-3xl", fullscreen = false }) {
-  return (
-    <div className={cx("fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm", fullscreen ? "p-0" : "flex items-center justify-center p-4")}>
-      <div
-        className={cx(
-          "w-full overflow-y-auto bg-white",
-          fullscreen
-            ? "h-screen"
-            : "max-h-[92vh] rounded-3xl shadow-2xl",
-          !fullscreen && width
-        )}
-      >
-        <div className={cx("sticky top-0 z-10 flex items-start justify-between border-b border-slate-200 bg-white", fullscreen ? "px-8 py-6" : "p-6")}>
-          <div>
-            <p className="text-sm font-semibold text-[#0F7EA8]">{subtitle}</p>
-            <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100">
-            <X size={20} />
-          </button>
+    <div className="space-y-3">
+      {criteria.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-5 text-sm text-slate-500">
+          No success criteria yet. A strong PoC defines 3-5 measurable pass/fail conditions up front.
         </div>
-        {children}
+      ) : (
+        <ul className="space-y-2">
+          {criteria.map((criterion) => (
+            <li key={criterion.id} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+              <input
+                type="checkbox"
+                checked={Boolean(criterion.met)}
+                onChange={() => onChange(criteria.map((item) => (item.id === criterion.id ? { ...item, met: !item.met } : item)))}
+                className="h-4 w-4 shrink-0 rounded border-slate-300 accent-brand-600"
+              />
+              <Input
+                value={criterion.text}
+                onChange={(event) => onChange(criteria.map((item) => (item.id === criterion.id ? { ...item, text: event.target.value } : item)))}
+                className="h-9 border-transparent shadow-none focus:border-brand-500"
+              />
+              <button
+                type="button"
+                onClick={() => onChange(criteria.filter((item) => item.id !== criterion.id))}
+                className="shrink-0 rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+              >
+                <Trash2 size={15} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex gap-2">
+        <Input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add(); } }}
+          placeholder="e.g. Response accuracy above 90% on test set"
+        />
+        <Button type="button" variant="secondary" onClick={add}><Plus size={16} /> Add</Button>
       </div>
     </div>
   );
 }
 
-function MetricCard({ title, value, helper, icon: Icon }) {
+function TasksCard({ project, onAddTask, onToggleTask, onRemoveTask }) {
+  const [title, setTitle] = useState("");
+  const [due, setDue] = useState("");
+  const tasks = (project.tasks || []).slice().sort((a, b) => {
+    if (a.done !== b.done) return a.done ? 1 : -1;
+    return (daysUntil(a.due) ?? 999) - (daysUntil(b.due) ?? 999);
+  });
+  const progress = getTaskProgress(project);
+
+  const add = () => {
+    if (!title.trim()) return;
+    onAddTask(project.id, { title, due });
+    setTitle("");
+    setDue("");
+  };
+
   return (
-    <Card className="p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm text-slate-500">{title}</p>
-          <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{value}</p>
-          <p className="mt-1 text-sm text-slate-500">{helper}</p>
+    <Card className="border-slate-200/80 p-6">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-semibold text-slate-900"><ListChecks size={15} className="text-brand-600" /> Tasks</p>
+        {progress.total > 0 && <span className="text-xs font-semibold text-slate-500">{progress.done}/{progress.total} done</span>}
+      </div>
+      {progress.total > 0 && (
+        <div className="mt-3 h-1.5 rounded-full bg-slate-100">
+          <div className="h-1.5 rounded-full bg-emerald-500" style={{ width: `${progress.percent}%` }} />
         </div>
-        <div className="rounded-2xl bg-cyan-50 p-3 text-[#0F7EA8]">
-          <Icon size={20} />
+      )}
+      <div className="mt-3 space-y-2">
+        {tasks.length === 0 ? (
+          <p className="text-sm leading-6 text-slate-500">No tasks yet. Break the next milestone into concrete steps.</p>
+        ) : (
+          tasks.map((task) => {
+            const days = daysUntil(task.due);
+            const overdue = days !== null && days < 0 && !task.done;
+            return (
+              <div key={task.id} className="group flex items-start gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                <input
+                  type="checkbox"
+                  checked={Boolean(task.done)}
+                  onChange={() => onToggleTask(project.id, task.id)}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 accent-brand-600"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className={cx("text-sm leading-5", task.done ? "text-slate-400 line-through" : "text-slate-800")}>{task.title}</p>
+                  {task.due && (
+                    <p className={cx("mt-0.5 text-xs", overdue ? "font-semibold text-rose-600" : "text-slate-500")}>
+                      {formatRelative(task.due)}{task.owner ? ` · ${task.owner}` : ""}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onRemoveTask(project.id, task.id)}
+                  className="shrink-0 rounded-lg p-1 text-slate-300 opacity-0 transition group-hover:opacity-100 hover:bg-rose-50 hover:text-rose-600"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            );
+          })
+        )}
+      </div>
+      <div className="mt-3 space-y-2">
+        <Input
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add(); } }}
+          placeholder="Add a task…"
+          className="h-10"
+        />
+        <div className="flex gap-2">
+          <Input type="date" value={due} onChange={(event) => setDue(event.target.value)} className="h-10" />
+          <Button type="button" variant="secondary" className="shrink-0 px-3 py-2" onClick={add}><Plus size={15} /></Button>
         </div>
       </div>
-    </Card>
-  );
-}
-
-function EmptyState({ title, text, action }) {
-  return (
-    <Card className="p-10 text-center">
-      <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-      <p className="mt-2 text-sm text-slate-500">{text}</p>
-      {action && <div className="mt-5">{action}</div>}
     </Card>
   );
 }
@@ -933,6 +654,20 @@ function ProjectForm({ project, onSave, onClose }) {
         <StagePanel title="Expected value">
           <Textarea value={form.value} onChange={(e) => set("value", e.target.value)} className="min-h-32" />
         </StagePanel>
+        <StagePanel title="PoC charter" description="The testable commitment: hypothesis, timeline, budget, and outcome. This powers the PoC Hub.">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="PoC hypothesis" wide><Textarea value={form.pocHypothesis} onChange={(e) => set("pocHypothesis", e.target.value)} placeholder="We believe that [solution] will [measurable effect] for [users], proven by [evidence]." /></Field>
+            <Field label="Start date"><Input type="date" value={form.pocStartDate} onChange={(e) => set("pocStartDate", e.target.value)} /></Field>
+            <Field label="End date"><Input type="date" value={form.pocEndDate} onChange={(e) => set("pocEndDate", e.target.value)} /></Field>
+            <Field label="Budget (USD)"><Input value={form.pocBudget} onChange={(e) => set("pocBudget", e.target.value)} placeholder="e.g. 25000" /></Field>
+            <Field label="Spend to date (USD)"><Input value={form.pocSpend} onChange={(e) => set("pocSpend", e.target.value)} placeholder="e.g. 8000" /></Field>
+            <Field label="Outcome"><Select value={form.pocOutcome || "Pending"} onChange={(e) => set("pocOutcome", e.target.value)} options={pocOutcomes} /></Field>
+            <Field label="Learnings" wide><Textarea value={form.pocLearnings} onChange={(e) => set("pocLearnings", e.target.value)} placeholder="What the PoC proved, disproved, or surprised us with." /></Field>
+          </div>
+        </StagePanel>
+        <StagePanel title="Success criteria" description="Measurable pass/fail conditions. These drive the go/no-go signal in the PoC Hub.">
+          <SuccessCriteriaEditor criteria={form.pocSuccessCriteria || []} onChange={(rows) => set("pocSuccessCriteria", rows)} />
+        </StagePanel>
         <StagePanel title="Partner application assessment" description="Capture the commercial and strategic decision basis for the preferred partner.">
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Selected vendor">
@@ -1044,13 +779,13 @@ function ProjectForm({ project, onSave, onClose }) {
                         className={cx(
                           "inline-flex shrink-0 items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold transition",
                           isActive
-                            ? "border-[#0F7EA8] bg-[#f7fbff] text-[#0F7EA8]"
+                            ? "border-brand-500 bg-brand-50 text-brand-700"
                             : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-900"
                         )}
                       >
                         <span className={cx(
                           "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
-                          isActive ? "bg-[#0F7EA8] text-white" : "bg-slate-100 text-slate-500"
+                          isActive ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-500"
                         )}>
                           {index + 1}
                         </span>
@@ -1063,7 +798,7 @@ function ProjectForm({ project, onSave, onClose }) {
               <div className="border-b border-slate-200 bg-slate-50/40 px-6 py-5">
                 <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-[#0F7EA8]">Workflow stage</p>
+                    <p className="text-sm font-semibold text-brand-600">Workflow stage</p>
                     <h3 className="mt-1 text-2xl font-semibold text-slate-900">{activeStageTab}</h3>
                     <p className="mt-1 text-sm text-slate-500">Complete only the fields needed for this stage.</p>
                   </div>
@@ -1077,7 +812,7 @@ function ProjectForm({ project, onSave, onClose }) {
                         <span>{stageCompletion.completed}/{stageCompletion.total}</span>
                       </div>
                       <div className="h-2 rounded-full bg-slate-200">
-                        <div className="h-2 rounded-full bg-[#0F7EA8]" style={{ width: `${stageCompletion.percent}%` }} />
+                        <div className="h-2 rounded-full bg-brand-600" style={{ width: `${stageCompletion.percent}%` }} />
                       </div>
                     </div>
                   </div>
@@ -1162,6 +897,22 @@ function DecisionForm({ decision, projects, onSave, onClose }) {
 function Overview({ projects, decisions, onOpenProject, onSetView }) {
   const openDecisions = decisions.filter((decision) => decision.status !== "Closed");
   const [showAllProjects, setShowAllProjects] = useState(false);
+
+  const statusMix = statuses
+    .map((status) => ({ name: status, value: projects.filter((project) => project.status === status).length }))
+    .filter((item) => item.value > 0);
+
+  const upcomingMilestones = projects
+    .filter((project) => project.targetDate && project.status !== "Completed")
+    .map((project) => ({ project, days: daysUntil(project.targetDate) }))
+    .filter(({ days }) => days !== null && days >= 0 && days <= 45)
+    .sort((a, b) => a.days - b.days)
+    .slice(0, 5);
+
+  const urgentDecisions = openDecisions
+    .slice()
+    .sort((a, b) => (daysUntil(a.due) ?? 999) - (daysUntil(b.due) ?? 999))
+    .slice(0, 5);
   const orderedProjects = projects
     .map((project) => ({ ...project, health: getProjectHealth(project) }))
     .sort((a, b) => {
@@ -1190,7 +941,7 @@ function Overview({ projects, decisions, onOpenProject, onSetView }) {
         <Card className="p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-[#0F7EA8]">Portfolio queue</p>
+              <p className="text-sm font-semibold text-brand-600">Portfolio queue</p>
               <h3 className="mt-1 text-xl font-semibold text-slate-900">Projects to review</h3>
               <p className="mt-1 text-sm text-slate-500">Top projects are visible first. Expand the list when you want the rest.</p>
             </div>
@@ -1208,7 +959,7 @@ function Overview({ projects, decisions, onOpenProject, onSetView }) {
               <div className="rounded-2xl border border-dashed border-slate-200 p-5 text-sm text-slate-500">No projects available.</div>
             ) : (
               visibleProjects.map((project) => (
-                <button key={project.id} onClick={() => onOpenProject(project)} className="flex w-full items-center justify-between gap-4 rounded-2xl border border-slate-200 p-4 text-left transition hover:border-cyan-200 hover:bg-cyan-50/40">
+                <button key={project.id} onClick={() => onOpenProject(project)} className="flex w-full items-center justify-between gap-4 rounded-2xl border border-slate-200 p-4 text-left transition hover:border-brand-200 hover:bg-brand-50/60">
                   <div className="min-w-0">
                     <p className="font-semibold text-slate-900">{project.name}</p>
                     <p className="mt-1 text-sm text-slate-500">{project.stage} · {project.owner} · {formatRelative(project.targetDate)}</p>
@@ -1231,7 +982,7 @@ function Overview({ projects, decisions, onOpenProject, onSetView }) {
         </Card>
 
         <Card className="p-5">
-          <p className="text-sm font-semibold text-[#0F7EA8]">Stage distribution</p>
+          <p className="text-sm font-semibold text-brand-600">Stage distribution</p>
           <div className="mt-5 space-y-4">
             {byStage.map((item) => (
               <div key={item.stage}>
@@ -1240,10 +991,86 @@ function Overview({ projects, decisions, onOpenProject, onSetView }) {
                   <span className="font-semibold text-slate-900">{item.count}</span>
                 </div>
                 <div className="h-2 rounded-full bg-slate-100">
-                  <div className="h-2 rounded-full bg-[#0F7EA8]" style={{ width: `${projects.length ? (item.count / projects.length) * 100 : 0}%` }} />
+                  <div className="h-2 rounded-full bg-brand-600" style={{ width: `${projects.length ? (item.count / projects.length) * 100 : 0}%` }} />
                 </div>
               </div>
             ))}
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="p-5">
+          <p className="text-sm font-semibold text-brand-600">Health mix</p>
+          <div className="mt-2 h-52">
+            {statusMix.length === 0 ? (
+              <p className="pt-8 text-center text-sm text-slate-400">No projects yet.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={statusMix} dataKey="value" nameKey="name" innerRadius="55%" outerRadius="82%" paddingAngle={3}>
+                    {statusMix.map((entry) => (
+                      <Cell key={entry.name} fill={STATUS_BAR[entry.name]?.hex || "#64748b"} />
+                    ))}
+                  </Pie>
+                  <ChartTooltip contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 13 }} />
+                  <Legend verticalAlign="bottom" iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-brand-600">Upcoming milestones</p>
+            <span className="text-xs text-slate-400">Next 45 days</span>
+          </div>
+          <div className="mt-4 space-y-2.5">
+            {upcomingMilestones.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">Nothing due in the next 45 days.</p>
+            ) : (
+              upcomingMilestones.map(({ project, days }) => (
+                <button
+                  key={project.id}
+                  onClick={() => onOpenProject(project)}
+                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2.5 text-left transition hover:border-brand-200 hover:bg-brand-50/50"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900">{project.name}</p>
+                    <p className="truncate text-xs text-slate-500">{project.nextMilestone || project.stage}</p>
+                  </div>
+                  <Badge tone={days <= 7 ? "watch" : "default"}>{days === 0 ? "Today" : `${days}d`}</Badge>
+                </button>
+              ))
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-brand-600">Decisions needing attention</p>
+            <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => onSetView("Decisions")}>View all</Button>
+          </div>
+          <div className="mt-4 space-y-2.5">
+            {urgentDecisions.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">No open decisions. Nice.</p>
+            ) : (
+              urgentDecisions.map((decision) => {
+                const days = daysUntil(decision.due);
+                const overdue = days !== null && days < 0;
+                return (
+                  <div key={decision.id} className="rounded-xl border border-slate-200 px-3 py-2.5">
+                    <p className="truncate text-sm font-semibold text-slate-900">{decision.decision}</p>
+                    <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-500">
+                      <span className="truncate">{decision.project}</span>
+                      <span>·</span>
+                      <span className={overdue ? "font-semibold text-rose-600" : ""}>{formatRelative(decision.due)}</span>
+                    </p>
+                  </div>
+                );
+              })
+            )}
           </div>
         </Card>
       </div>
@@ -1316,7 +1143,7 @@ function ProjectsView({ projects, onOpenProject, onNewProject, onAdvanceStage, o
                   const upcoming = nextStage(project.stage);
                   const completion = getStageCompletion(project, project.stage);
                   return (
-                    <tr key={project.id} className="hover:bg-cyan-50/30">
+                    <tr key={project.id} className="hover:bg-brand-50/30">
                       <td className="px-5 py-4">
                         <button onClick={() => onOpenProject(project)} className="text-left">
                           <p className="font-semibold text-slate-900">{project.name}</p>
@@ -1338,7 +1165,14 @@ function ProjectsView({ projects, onOpenProject, onNewProject, onAdvanceStage, o
                         <div className="text-slate-700">{project.targetDate || "—"}</div>
                         <div className="mt-1 text-xs text-slate-500">{formatRelative(project.targetDate)}</div>
                       </td>
-                      <td className="px-5 py-4 text-slate-700">{project.nextMilestone || "—"}</td>
+                      <td className="px-5 py-4">
+                        <div className="text-slate-700">{project.nextMilestone || "—"}</div>
+                        {(project.tasks || []).length > 0 && (
+                          <div className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                            <ListChecks size={12} /> {getTaskProgress(project).done}/{getTaskProgress(project).total} tasks
+                          </div>
+                        )}
+                      </td>
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2">
                           <Button variant="secondary" className="px-3 py-2 text-xs" onClick={() => onOpenProject(project)}>Open</Button>
@@ -1523,10 +1357,10 @@ function RoadmapView({ projects, onOpenProject, onNewProject }) {
                     const days = daysUntil(project.targetDate);
                     const isOverdue = days !== null && days < 0 && project.status !== "Completed";
                     return (
-                      <div key={project.id} className="flex border-b border-slate-100 last:border-b-0 hover:bg-cyan-50/30">
+                      <div key={project.id} className="flex border-b border-slate-100 last:border-b-0 hover:bg-brand-50/30">
                         <button
                           onClick={() => onOpenProject(project)}
-                          className="sticky left-0 z-20 flex shrink-0 flex-col justify-center bg-white px-5 text-left hover:bg-cyan-50/40"
+                          className="sticky left-0 z-20 flex shrink-0 flex-col justify-center bg-white px-5 text-left hover:bg-brand-50/60"
                           style={{ width: leftWidth, height: rowHeight }}
                         >
                           <span className="flex items-center gap-1.5 truncate text-sm font-semibold text-slate-900">
@@ -1572,7 +1406,7 @@ function RoadmapView({ projects, onOpenProject, onNewProject }) {
               <button
                 key={project.id}
                 onClick={() => onOpenProject(project)}
-                className="rounded-xl border border-dashed border-slate-200 p-3 text-left transition hover:border-[#0F7EA8] hover:bg-cyan-50/40"
+                className="rounded-xl border border-dashed border-slate-200 p-3 text-left transition hover:border-brand-400 hover:bg-brand-50/60"
               >
                 <p className="truncate text-sm font-semibold text-slate-900">{project.name}</p>
                 <p className="mt-1 truncate text-xs text-slate-500">{project.stage} · {project.owner || "Unassigned"}</p>
@@ -1585,60 +1419,80 @@ function RoadmapView({ projects, onOpenProject, onNewProject }) {
   );
 }
 
-function StagePanel({ title, description, children }) {
+function PocCharterPanel({ project }) {
+  const progress = getPocCriteriaProgress(project);
+  const budget = parseAmount(project.pocBudget);
+  const spend = parseAmount(project.pocSpend) ?? 0;
+  const daysLeft = daysUntil(project.pocEndDate);
+  const hasCharter = hasValue(project.pocHypothesis) || progress.total > 0 || budget !== null;
+
   return (
-    <Card className="border-slate-150 bg-white p-6">
-      <div className="mb-4">
-        <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-        {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
-      </div>
-      {children}
-    </Card>
+    <StagePanel title="PoC charter" description="The testable commitment behind this proof of concept.">
+      {!hasCharter ? (
+        <p className="rounded-2xl border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-500">
+          No PoC charter yet. Edit the project and complete the POC stage to define the hypothesis, success criteria, and budget.
+        </p>
+      ) : (
+        <div className="space-y-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Hypothesis</p>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.pocHypothesis || "Not provided."}</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+              <p className="text-xs text-slate-500">Timeline</p>
+              <p className="mt-1 text-sm font-semibold text-slate-800">{formatShortDate(project.pocStartDate)} → {formatShortDate(project.pocEndDate)}</p>
+              {daysLeft !== null && (
+                <p className={cx("mt-0.5 text-xs", daysLeft < 0 ? "font-semibold text-rose-600" : "text-slate-500")}>
+                  {daysLeft < 0 ? `${Math.abs(daysLeft)}d over` : `${daysLeft}d remaining`}
+                </p>
+              )}
+            </div>
+            <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+              <p className="text-xs text-slate-500">Budget</p>
+              <p className="mt-1 text-sm font-semibold text-slate-800">
+                {budget === null ? "Not set" : `${formatAmount(spend)} / ${formatAmount(budget)}`}
+              </p>
+              {budget !== null && (
+                <div className="mt-1.5 h-1.5 rounded-full bg-slate-200">
+                  <div className={cx("h-1.5 rounded-full", spend > budget ? "bg-rose-500" : "bg-brand-600")} style={{ width: `${Math.min(Math.round((spend / budget) * 100), 100)}%` }} />
+                </div>
+              )}
+            </div>
+            <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+              <p className="text-xs text-slate-500">Outcome</p>
+              <p className="mt-1 text-sm font-semibold text-slate-800">{project.pocOutcome || "Pending"}</p>
+              {progress.total > 0 && <p className="mt-0.5 text-xs text-slate-500">{progress.met}/{progress.total} criteria met</p>}
+            </div>
+          </div>
+          {progress.total > 0 && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Success criteria</p>
+              <ul className="mt-2 space-y-1.5">
+                {(project.pocSuccessCriteria || []).map((criterion) => (
+                  <li key={criterion.id} className="flex items-start gap-2 text-sm leading-5">
+                    {criterion.met
+                      ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-500" />
+                      : <Target size={16} className="mt-0.5 shrink-0 text-slate-300" />}
+                    <span className={criterion.met ? "text-slate-500" : "text-slate-700"}>{criterion.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {project.pocLearnings && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Learnings</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.pocLearnings}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </StagePanel>
   );
 }
 
-function MiniTable({ columns, rows, emptyText = "No records." }) {
-  if (!rows.length) {
-    return <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">{emptyText}</div>;
-  }
-
-  const renderValue = (column, value) => {
-    if (!value) return "—";
-    if (column.key === "website") {
-      return (
-        <a href={value} target="_blank" rel="noreferrer" className="text-[#0F7EA8] underline decoration-slate-300 underline-offset-2">
-          {value}
-        </a>
-      );
-    }
-    return value;
-  };
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[760px] text-left text-sm">
-        <thead className="text-xs uppercase tracking-wide text-slate-500">
-          <tr className="border-b border-slate-200">
-            {columns.map((column) => (
-              <th key={column.key} className="px-3 py-3 font-semibold">{column.label}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {rows.map((row, index) => (
-            <tr key={row.number || row.vendorName || index} className="align-top">
-              {columns.map((column) => (
-                <td key={column.key} className="px-3 py-3 text-slate-700">{renderValue(column, row[column.key])}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function ProjectDetail({ project, decisions, onClose, onEdit, onDelete, onAdvanceStage }) {
+function ProjectDetail({ project, decisions, onClose, onEdit, onDelete, onAdvanceStage, onAddTask, onToggleTask, onRemoveTask }) {
   if (!project) return null;
   const relatedDecisions = decisions.filter((decision) => decision.project === project.name && decision.status !== "Closed");
   const upcoming = nextStage(project.stage);
@@ -1765,6 +1619,7 @@ function ProjectDetail({ project, decisions, onClose, onEdit, onDelete, onAdvanc
     ),
     "POC": (
       <div className="space-y-4">
+        <PocCharterPanel project={project} />
         <StagePanel title="Target solution" description="What the proposed solution should deliver at proof-of-concept stage.">
           <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{project.dreamScenario || "Not provided."}</p>
         </StagePanel>
@@ -1892,7 +1747,7 @@ function ProjectDetail({ project, decisions, onClose, onEdit, onDelete, onAdvanc
         <div className="grid gap-4 xl:grid-cols-4">
           <Card className="border-slate-200/80 p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Owner</p>
-            <p className="mt-2 flex items-center gap-2 text-sm text-slate-900"><User size={16} className="text-[#0F7EA8]" />{project.owner}</p>
+            <p className="mt-2 flex items-center gap-2 text-sm text-slate-900"><User size={16} className="text-brand-600" />{project.owner}</p>
           </Card>
           <Card className="border-slate-200/80 p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Business function</p>
@@ -1901,12 +1756,12 @@ function ProjectDetail({ project, decisions, onClose, onEdit, onDelete, onAdvanc
           </Card>
           <Card className="border-slate-200/80 p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Target date</p>
-            <p className="mt-2 flex items-center gap-2 text-sm text-slate-900"><CalendarDays size={16} className="text-[#0F7EA8]" />{project.targetDate || "No date"}</p>
+            <p className="mt-2 flex items-center gap-2 text-sm text-slate-900"><CalendarDays size={16} className="text-brand-600" />{project.targetDate || "No date"}</p>
             <p className="mt-1 text-xs text-slate-500">{formatRelative(project.targetDate)}</p>
           </Card>
           <Card className="border-slate-200/80 p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Recommendation</p>
-            <p className="mt-2 flex items-center gap-2 text-sm text-slate-900"><Flag size={16} className="text-[#0F7EA8]" />{project.recommendation}</p>
+            <p className="mt-2 flex items-center gap-2 text-sm text-slate-900"><Flag size={16} className="text-brand-600" />{project.recommendation}</p>
           </Card>
         </div>
 
@@ -1925,14 +1780,14 @@ function ProjectDetail({ project, decisions, onClose, onEdit, onDelete, onAdvanc
                     className={cx(
                       "inline-flex shrink-0 items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold transition",
                       isActive
-                        ? "border-[#0F7EA8] bg-[#f7fbff] text-[#0F7EA8]"
+                        ? "border-brand-500 bg-brand-50 text-brand-700"
                         : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-900"
                     )}
                   >
                     <span className={cx(
                       "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
                       isCurrent
-                        ? "bg-[#0F7EA8] text-white"
+                        ? "bg-brand-600 text-white"
                         : isComplete
                           ? "bg-emerald-100 text-emerald-700"
                           : "bg-slate-100 text-slate-500"
@@ -1948,7 +1803,7 @@ function ProjectDetail({ project, decisions, onClose, onEdit, onDelete, onAdvanc
           <div className="border-b border-slate-200 bg-slate-50/40 px-6 py-5">
             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
               <div>
-                <p className="text-sm font-semibold text-[#0F7EA8]">Workflow stage</p>
+                <p className="text-sm font-semibold text-brand-600">Workflow stage</p>
                 <h3 className="mt-1 text-2xl font-semibold text-slate-900">{activeStageTab}</h3>
                 <p className="mt-1 text-sm text-slate-500">
                   {activeStageIndex < stageIndex
@@ -1968,7 +1823,7 @@ function ProjectDetail({ project, decisions, onClose, onEdit, onDelete, onAdvanc
                     <span>{stageCompletion.completed}/{stageCompletion.total}</span>
                   </div>
                   <div className="h-2 rounded-full bg-slate-200">
-                    <div className="h-2 rounded-full bg-[#0F7EA8]" style={{ width: `${stageCompletion.percent}%` }} />
+                    <div className="h-2 rounded-full bg-brand-600" style={{ width: `${stageCompletion.percent}%` }} />
                   </div>
                 </div>
               </div>
@@ -1981,7 +1836,7 @@ function ProjectDetail({ project, decisions, onClose, onEdit, onDelete, onAdvanc
               </div>
               <div className="space-y-4">
                 <Card className="border-slate-200/80 bg-slate-50/60 p-6">
-                  <p className="text-sm font-semibold text-[#0F7EA8]">Decision guide</p>
+                  <p className="text-sm font-semibold text-brand-600">Decision guide</p>
                   <h4 className="mt-2 text-xl font-semibold text-slate-900">{decisionGuide.title}</h4>
                   <p className="mt-2 text-sm leading-6 text-slate-600">{decisionGuide.decision}</p>
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -2022,6 +1877,8 @@ function ProjectDetail({ project, decisions, onClose, onEdit, onDelete, onAdvanc
                         : "Use this stage to prepare the next workflow step and confirm the required inputs."}
                   </p>
                 </Card>
+
+                <TasksCard project={project} onAddTask={onAddTask} onToggleTask={onToggleTask} onRemoveTask={onRemoveTask} />
 
                 <Card className="border-slate-200/80 p-6">
                   <p className="text-sm font-semibold text-slate-900">Activity</p>
@@ -2106,7 +1963,7 @@ function DecisionsView({ decisions, onAdd, onEdit, onDelete }) {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {sorted.map((decision) => (
-                  <tr key={decision.id} className="hover:bg-cyan-50/30">
+                  <tr key={decision.id} className="hover:bg-brand-50/30">
                     <td className="px-5 py-4 font-medium text-slate-900">{decision.project}</td>
                     <td className="px-5 py-4 text-slate-700">{decision.decision}</td>
                     <td className="px-5 py-4 text-slate-700">{decision.owner || "—"}</td>
@@ -2137,15 +1994,16 @@ function AgentView({ messages, draft, onDraftChange, onSubmit, onRunSuggestion }
   const suggestions = [
     "Summarize portfolio",
     "At-risk projects",
+    "PoC status",
     "Open Warehouse Safety",
+    "Add task to Network Optimization: Review benchmark results",
     "Set Cargo Insurance status to Red",
-    "Advance Customer Facing AI",
   ];
 
   return (
     <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
       <Card className="p-6">
-        <p className="text-sm font-semibold text-[#0F7EA8]">Quick chat</p>
+        <p className="text-sm font-semibold text-brand-600">Quick chat</p>
         <h3 className="mt-1 text-xl font-semibold text-slate-900">AI workspace</h3>
         <p className="mt-2 text-sm leading-6 text-slate-500">
           Ask about projects or update them directly from chat.
@@ -2156,7 +2014,7 @@ function AgentView({ messages, draft, onDraftChange, onSubmit, onRunSuggestion }
               key={suggestion}
               type="button"
               onClick={() => onRunSuggestion(suggestion)}
-              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:border-cyan-200 hover:bg-cyan-50/40"
+              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:border-brand-200 hover:bg-brand-50/60"
             >
               {suggestion}
             </button>
@@ -2176,7 +2034,7 @@ function AgentView({ messages, draft, onDraftChange, onSubmit, onRunSuggestion }
       <Card className="flex min-h-[700px] flex-col overflow-hidden">
         <div className="border-b border-slate-200 px-6 py-5">
           <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-cyan-50 p-3 text-[#0F7EA8]">
+            <div className="rounded-2xl bg-brand-50 p-3 text-brand-600">
               <Bot size={20} />
             </div>
             <div>
@@ -2187,7 +2045,7 @@ function AgentView({ messages, draft, onDraftChange, onSubmit, onRunSuggestion }
         </div>
         <div className="flex-1 space-y-4 overflow-y-auto bg-[#fbfcfe] px-6 py-6">
           {messages.map((message) => (
-            <div key={message.id} className={cx("max-w-[80%] rounded-3xl px-4 py-3", message.role === "user" ? "ml-auto bg-[#0F7EA8] text-white" : "bg-white text-slate-800 border border-slate-200")}>
+            <div key={message.id} className={cx("max-w-[80%] rounded-3xl px-4 py-3", message.role === "user" ? "ml-auto bg-brand-600 text-white" : "bg-white text-slate-800 border border-slate-200")}>
               <p className="whitespace-pre-wrap text-sm leading-6">{message.text}</p>
             </div>
           ))}
@@ -2247,7 +2105,7 @@ function SignInScreen({ onSignIn }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <Card className="w-full max-w-md p-8 text-center shadow-sm">
-        <p className="text-sm font-semibold text-[#0F7EA8]">Innovation Portfolio Hub</p>
+        <p className="text-sm font-semibold text-brand-600">Innovation Portfolio Hub</p>
         <h1 className="mt-2 text-2xl font-semibold text-slate-900">Sign in to continue</h1>
         <p className="mt-2 text-sm leading-6 text-slate-500">
           This workspace is shared across the team and protected by your organization account.
@@ -2262,7 +2120,7 @@ function FullScreenStatus({ title, detail, action, spinner = false, error = fals
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <Card className="w-full max-w-md p-8 text-center shadow-sm">
-        <div className={cx("mx-auto flex h-12 w-12 items-center justify-center rounded-2xl", error ? "bg-rose-50 text-rose-600" : "bg-cyan-50 text-[#0F7EA8]")}>
+        <div className={cx("mx-auto flex h-12 w-12 items-center justify-center rounded-2xl", error ? "bg-rose-50 text-rose-600" : "bg-brand-50 text-brand-600")}>
           {error ? <AlertTriangle size={22} /> : <RefreshCw size={22} className={spinner ? "animate-spin" : ""} />}
         </div>
         <h1 className="mt-4 text-xl font-semibold text-slate-900">{title}</h1>
@@ -2291,6 +2149,19 @@ export default function App() {
       text: "Quick chat is live. Ask about a project or tell me to update one.",
     },
   ]);
+
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((current) => !current);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   // Backend + auth lifecycle
   const [dataStatus, setDataStatus] = useState("loading"); // loading | ready | error
@@ -2425,37 +2296,92 @@ export default function App() {
   };
 
   const nav = [
-    { label: "Portfolio", icon: LayoutDashboard },
-    { label: "Roadmap", icon: CalendarDays },
-    { label: "Projects", icon: FolderKanban },
-    { label: "AI", icon: Bot },
-    { label: "Decisions", icon: ClipboardCheck },
-    { label: "Settings", icon: Settings },
+    { label: "Portfolio", icon: LayoutDashboard, title: "Portfolio overview", desc: "Initiatives, decision flow, delivery risk, and milestone timing in one place." },
+    { label: "Board", icon: Kanban, title: "Stage board", desc: "Drag projects through the workflow with stage-gate checks." },
+    { label: "Projects", icon: FolderKanban, title: "Projects", desc: "Browse, filter, and advance every initiative." },
+    { label: "Roadmap", icon: CalendarDays, title: "Delivery roadmap", desc: "Timeline of stages and milestones across the portfolio." },
+    { label: "PoC Hub", icon: FlaskConical, title: "PoC command center", desc: "Hypotheses, success criteria, budget burn, and go/no-go signals." },
+    { label: "Analytics", icon: BarChart3, title: "Portfolio analytics", desc: "Funnel, health, investment, and decision flow at a glance." },
+    { label: "Decisions", icon: ClipboardCheck, title: "Decision log", desc: "Track open decisions and the owners driving alignment." },
+    { label: "AI", icon: Bot, title: "AI assistant", desc: "Summaries, risks, and next actions across the portfolio." },
+    { label: "Settings", icon: Settings, title: "Settings", desc: "Backup, export, and workspace configuration." },
   ];
+  const activeNav = nav.find((item) => item.label === view) || nav[0];
 
   const appendAgentMessage = (role, text) => {
     setAgentMessages((current) => [...current, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, role, text }]);
   };
 
   const patchProject = (projectId, patch, activityText) => {
-    let nextSelectedProject = null;
-    setProjects((current) => current.map((project) => {
-      if (project.id !== projectId) return project;
-      const updated = {
-        ...project,
-        ...patch,
-        updatedAt: new Date().toISOString(),
-        activity: activityText ? [createActivityEntry("agent", activityText), ...(project.activity || [])].slice(0, 30) : project.activity || [],
-      };
-      nextSelectedProject = updated;
-      return updated;
-    }));
-    setSelectedProject((current) => {
-      if (!current || current.id !== projectId) return current;
-      return nextSelectedProject || current;
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) return null;
+    const updated = {
+      ...project,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+      activity: activityText ? [createActivityEntry("agent", activityText), ...(project.activity || [])].slice(0, 30) : project.activity || [],
+    };
+    setProjects((current) => current.map((item) => (item.id === projectId ? updated : item)));
+    setSelectedProject((current) => (current && current.id === projectId ? updated : current));
+    persistProject(updated, false);
+    return updated;
+  };
+
+  // Task management — lightweight per-project checklists.
+  const addTask = (projectId, { title, due }) => {
+    const project = projects.find((item) => item.id === projectId);
+    const trimmed = String(title || "").trim();
+    if (!project || !trimmed) return;
+    const task = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, title: trimmed, due: due || "", owner: "", done: false };
+    patchProject(projectId, { tasks: [...(project.tasks || []), task] }, `Task added: ${task.title}`);
+  };
+
+  const toggleTask = (projectId, taskId) => {
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) return;
+    let toggled = null;
+    const tasks = (project.tasks || []).map((task) => {
+      if (task.id !== taskId) return task;
+      toggled = { ...task, done: !task.done };
+      return toggled;
     });
-    if (nextSelectedProject) persistProject(nextSelectedProject, false);
-    return nextSelectedProject;
+    if (!toggled) return;
+    patchProject(projectId, { tasks }, `Task ${toggled.done ? "completed" : "reopened"}: ${toggled.title}`);
+  };
+
+  const removeTask = (projectId, taskId) => {
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) return;
+    const task = (project.tasks || []).find((item) => item.id === taskId);
+    if (!task) return;
+    patchProject(projectId, { tasks: (project.tasks || []).filter((item) => item.id !== taskId) }, `Task removed: ${task.title}`);
+  };
+
+  // PoC Hub interactions.
+  const togglePocCriterion = (projectId, criterionId) => {
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) return;
+    let toggled = null;
+    const criteria = (project.pocSuccessCriteria || []).map((criterion) => {
+      if (criterion.id !== criterionId) return criterion;
+      toggled = { ...criterion, met: !criterion.met };
+      return toggled;
+    });
+    if (!toggled) return;
+    patchProject(projectId, { pocSuccessCriteria: criteria }, `PoC criterion ${toggled.met ? "met" : "reopened"}: ${toggled.text}`);
+  };
+
+  const setPocOutcome = (projectId, outcome) => {
+    const project = projects.find((item) => item.id === projectId);
+    if (!project || project.pocOutcome === outcome) return;
+    patchProject(projectId, { pocOutcome: outcome }, `PoC outcome set to ${outcome}.`);
+  };
+
+  // Board drag-and-drop. Forward gate checks happen in BoardView before this is called.
+  const moveProjectStage = (projectId, targetStage) => {
+    const project = projects.find((item) => item.id === projectId);
+    if (!project || project.stage === targetStage || !stages.includes(targetStage)) return;
+    patchProject(projectId, { stage: targetStage }, `Stage moved from ${project.stage} to ${targetStage}.`);
   };
 
   const saveProject = (project) => {
@@ -2691,6 +2617,35 @@ export default function App() {
       return;
     }
 
+    const taskMatch = input.match(/^add (?:a )?task (?:to|for|on)\s+(.+?)\s*[:\-–]\s*(.+)$/i);
+    if (taskMatch) {
+      const project = findProjectByName(projects, taskMatch[1]);
+      if (!project) {
+        appendAgentMessage("assistant", `I could not find a project matching "${taskMatch[1]}".`);
+        return;
+      }
+      addTask(project.id, { title: taskMatch[2] });
+      appendAgentMessage("assistant", `Added task to ${project.name}: "${taskMatch[2].trim()}".`);
+      return;
+    }
+
+    if (/poc status|poc summary|active pocs|running pocs/.test(normalized)) {
+      const activePocs = projects.filter((project) => project.stage === "POC");
+      if (!activePocs.length) {
+        appendAgentMessage("assistant", "There are no active PoCs right now. Check the PoC Hub for pipeline candidates.");
+        return;
+      }
+      appendAgentMessage(
+        "assistant",
+        `Active PoCs\n\n${activePocs.map((project) => {
+          const progress = getPocCriteriaProgress(project);
+          const daysLeft = daysUntil(project.pocEndDate);
+          return `- ${project.name} · ${progress.met}/${progress.total} criteria met · ${daysLeft === null ? "no end date" : daysLeft < 0 ? `${Math.abs(daysLeft)}d over` : `${daysLeft}d left`} · outcome ${project.pocOutcome || "Pending"}`;
+        }).join("\n")}`
+      );
+      return;
+    }
+
     const projectPrefix = input.match(/^(?:set|update|change)\s+(.+?)\s+(status|priority|owner|target date|recommendation|next milestone)\s+to\s+(.+)$/i);
     if (projectPrefix) {
       const [, rawProjectName, rawField, rawValue] = projectPrefix;
@@ -2768,7 +2723,7 @@ export default function App() {
 
     appendAgentMessage(
       "assistant",
-      "I can summarize the portfolio, show at-risk work, open a project, advance a project, or update fields like status, priority, owner, target date, recommendation, and next milestone."
+      "I can summarize the portfolio, show at-risk work or active PoCs, open a project, advance a project, add tasks (\"Add task to <project>: <task>\"), or update fields like status, priority, owner, target date, recommendation, and next milestone."
     );
   };
 
@@ -2810,52 +2765,119 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="w-full px-4 py-6 lg:px-8">
-        {syncError && (
-          <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-2">
-              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-              <span>{syncError}</span>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="secondary" className="px-3 py-2 text-xs" onClick={loadWorkspace}>Reload from server</Button>
-              <Button variant="secondary" className="px-3 py-2 text-xs" onClick={() => setSyncError(null)}>Dismiss</Button>
-            </div>
+    <div className="min-h-screen text-slate-900">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-sidebar-gradient text-white lg:flex">
+        <div className="flex items-center gap-3 px-5 pb-5 pt-6">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15 backdrop-blur">
+            <FolderKanban size={20} className="text-white" />
           </div>
-        )}
-        <header className="mb-6 flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-[#0F7EA8]">IPH</p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">Portfolio</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-              Manage active initiatives, decision flow, delivery risk, and milestone timing in one place.
-            </p>
+          <div className="leading-tight">
+            <p className="text-sm font-bold tracking-tight">Innovation Hub</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-brand-200/80">Maersk Portfolio</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {nav.map(({ label, icon: Icon }) => (
-              <button key={label} onClick={() => setView(label)} className={cx("inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition", view === label ? "bg-[#0F7EA8] text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200")}>
-                <Icon size={16} />
+        </div>
+        <nav className="flex-1 space-y-1 px-3 py-2">
+          {nav.map(({ label, icon: Icon }) => {
+            const active = view === label;
+            return (
+              <button
+                key={label}
+                onClick={() => setView(label)}
+                className={cx(
+                  "group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all",
+                  active ? "bg-white/[0.12] text-white ring-1 ring-white/10" : "text-brand-100/70 hover:bg-white/5 hover:text-white"
+                )}
+              >
+                <span className={cx("flex h-7 w-7 items-center justify-center rounded-lg transition", active ? "bg-white/15 text-white" : "text-brand-200/70 group-hover:text-white")}>
+                  <Icon size={17} />
+                </span>
                 {label}
+                {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-300" />}
+              </button>
+            );
+          })}
+        </nav>
+        <div className="mt-auto px-3 pb-5">
+          <div className="rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-gradient text-sm font-bold text-white ring-2 ring-white/15">
+                {(account?.name || account?.username || "IH").slice(0, 1).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-white">{account?.name || account?.username || "Local workspace"}</p>
+                <p className="truncate text-[11px] text-brand-200/70">{isRemoteBackend ? "SharePoint backend" : "This browser only"}</p>
+              </div>
+              {isRemoteBackend && account && (
+                <button type="button" onClick={signOut} title="Sign out" className="rounded-lg p-1.5 text-brand-200/70 transition hover:bg-white/10 hover:text-white">
+                  <LogOut size={16} />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <div className="lg:pl-64">
+        <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/75 backdrop-blur-xl">
+          <div className="flex items-center justify-between gap-3 px-4 py-3.5 lg:px-8">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-gradient text-white shadow-brand-sm lg:hidden">
+                <FolderKanban size={18} />
+              </div>
+              <div className="min-w-0">
+                <h1 className="truncate text-lg font-bold tracking-tight text-slate-900 lg:text-xl">{activeNav.title}</h1>
+                <p className="hidden truncate text-sm text-slate-500 sm:block">{activeNav.desc}</p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPaletteOpen(true)}
+                className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500 shadow-card transition hover:border-slate-300 hover:text-slate-700 md:inline-flex"
+              >
+                <Search size={14} /> Search…
+                <kbd className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">⌘K</kbd>
+              </button>
+              <Button onClick={() => { setEditingProject(null); setShowProjectForm(true); }}>
+                <Plus size={16} /> <span className="hidden sm:inline">New project</span>
+              </Button>
+            </div>
+          </div>
+          <nav className="flex gap-1.5 overflow-x-auto px-4 pb-3 lg:hidden">
+            {nav.map(({ label, icon: Icon }) => (
+              <button key={label} onClick={() => setView(label)} className={cx("inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition", view === label ? "bg-brand-600 text-white shadow-brand-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200")}>
+                <Icon size={15} /> {label}
               </button>
             ))}
-            <Button onClick={() => { setEditingProject(null); setShowProjectForm(true); }}>
-              <Plus size={16} /> New project
-            </Button>
-            {isRemoteBackend && account && (
-              <div className="ml-1 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                <User size={14} className="text-[#0F7EA8]" />
-                <span className="max-w-[160px] truncate">{account.username || account.name}</span>
-                <button type="button" onClick={signOut} title="Sign out" className="rounded-lg p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">
-                  <LogOut size={14} />
-                </button>
-              </div>
-            )}
-          </div>
+          </nav>
         </header>
+
+        <main className="px-4 py-6 lg:px-8">
+          {syncError && (
+            <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-2">
+                <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                <span>{syncError}</span>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="secondary" className="px-3 py-2 text-xs" onClick={loadWorkspace}>Reload from server</Button>
+                <Button variant="secondary" className="px-3 py-2 text-xs" onClick={() => setSyncError(null)}>Dismiss</Button>
+              </div>
+            </div>
+          )}
+          <div key={view} className="mx-auto max-w-7xl animate-fade-in">
 
         {view === "Portfolio" && (
           <Overview projects={projects} decisions={decisions} onOpenProject={setSelectedProject} onSetView={setView} />
+        )}
+
+        {view === "Board" && (
+          <BoardView
+            projects={projects}
+            onOpenProject={setSelectedProject}
+            onNewProject={() => { setEditingProject(null); setShowProjectForm(true); }}
+            onMoveStage={moveProjectStage}
+          />
         )}
 
         {view === "Roadmap" && (
@@ -2864,6 +2886,20 @@ export default function App() {
             onOpenProject={setSelectedProject}
             onNewProject={() => { setEditingProject(null); setShowProjectForm(true); }}
           />
+        )}
+
+        {view === "PoC Hub" && (
+          <PocView
+            projects={projects}
+            onOpenProject={setSelectedProject}
+            onToggleCriterion={togglePocCriterion}
+            onSetOutcome={setPocOutcome}
+            onMoveStage={moveProjectStage}
+          />
+        )}
+
+        {view === "Analytics" && (
+          <AnalyticsView projects={projects} decisions={decisions} />
         )}
 
         {view === "Projects" && (
@@ -2908,7 +2944,19 @@ export default function App() {
             onReset={reset}
           />
         )}
+          </div>
+        </main>
       </div>
+
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        projects={projects}
+        navItems={nav}
+        onOpenProject={setSelectedProject}
+        onSetView={setView}
+        onNewProject={() => { setEditingProject(null); setShowProjectForm(true); }}
+      />
 
       {selectedProject && (
         <ProjectDetail
@@ -2918,6 +2966,9 @@ export default function App() {
           onEdit={(project) => { setEditingProject(project); setShowProjectForm(true); }}
           onDelete={deleteProject}
           onAdvanceStage={advanceProjectStage}
+          onAddTask={addTask}
+          onToggleTask={toggleTask}
+          onRemoveTask={removeTask}
         />
       )}
 
