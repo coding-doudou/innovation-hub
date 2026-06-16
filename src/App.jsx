@@ -1032,57 +1032,59 @@ function Overview({ projects, decisions, onOpenProject, onSetView }) {
         <MetricCard title="Completed" value={projects.filter((project) => project.status === "Completed").length} helper="Delivered or closed" icon={CheckCircle2} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        <Card className="p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-brand-600">Portfolio queue</p>
-              <h3 className="mt-1 text-xl font-semibold text-slate-900">Projects to review</h3>
-              <p className="mt-1 text-sm text-slate-500">Top projects are visible first. Expand the list when you want the rest.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {orderedProjects.length > 3 && (
-                <Button variant="secondary" onClick={() => setShowAllProjects((current) => !current)}>
-                  {showAllProjects ? "Show less" : `Show all (${orderedProjects.length})`}
-                </Button>
-              )}
-              <Button variant="secondary" onClick={() => onSetView("Projects")}>Open projects</Button>
-            </div>
+      <Card className="p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-brand-600">Portfolio queue</p>
+            <h3 className="mt-1 text-xl font-semibold text-slate-900">Projects to review</h3>
+            <p className="mt-1 text-sm text-slate-500">Highest-risk and soonest-due initiatives first.</p>
           </div>
-          <div className="mt-5 space-y-3">
-            {orderedProjects.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 p-5 text-sm text-slate-500">No projects available.</div>
-            ) : (
-              visibleProjects.map((project) => (
-                <button key={project.id} onClick={() => onOpenProject(project)} className="flex w-full items-center justify-between gap-4 rounded-2xl border border-slate-200 p-4 text-left transition hover:border-brand-200 hover:bg-brand-50/60">
+          <div className="flex flex-wrap gap-2">
+            {orderedProjects.length > 3 && (
+              <Button variant="secondary" onClick={() => setShowAllProjects((current) => !current)}>
+                {showAllProjects ? "Show less" : `Show all (${orderedProjects.length})`}
+              </Button>
+            )}
+            <Button variant="secondary" onClick={() => onSetView("Projects")}>Open projects</Button>
+          </div>
+        </div>
+        <div className="mt-5">
+          {orderedProjects.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 p-5 text-sm text-slate-500">No projects available.</div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {visibleProjects.map((project) => (
+                <button key={project.id} onClick={() => onOpenProject(project)} className="flex h-full items-start justify-between gap-3 rounded-2xl border border-slate-200 p-4 text-left transition hover:border-brand-200 hover:bg-brand-50/60">
                   <div className="min-w-0">
                     <p className="font-semibold text-slate-900">{project.name}</p>
                     <p className="mt-1 text-sm text-slate-500">{project.stage} · {project.owner} · {formatRelative(project.targetDate)}</p>
-                    {project.nextMilestone && <p className="mt-2 text-sm text-slate-700">Next: {project.nextMilestone}</p>}
+                    {project.nextMilestone && <p className="mt-2 line-clamp-2 text-sm text-slate-700">Next: {project.nextMilestone}</p>}
                   </div>
                   <Badge tone={project.health}>{project.health === "critical" ? "Needs action" : "Watch"}</Badge>
                 </button>
-              ))
-            )}
-            {!showAllProjects && orderedProjects.length > 3 && (
-              <button
-                type="button"
-                onClick={() => setShowAllProjects(true)}
-                className="flex w-full items-center justify-center rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-sm font-semibold text-slate-600 transition hover:border-slate-400 hover:text-slate-900"
-              >
-                Show {orderedProjects.length - 3} more projects
-              </button>
-            )}
-          </div>
-        </Card>
+              ))}
+            </div>
+          )}
+          {!showAllProjects && orderedProjects.length > 3 && (
+            <button
+              type="button"
+              onClick={() => setShowAllProjects(true)}
+              className="mt-3 flex w-full items-center justify-center rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-sm font-semibold text-slate-600 transition hover:border-slate-400 hover:text-slate-900"
+            >
+              Show {orderedProjects.length - 3} more projects
+            </button>
+          )}
+        </div>
+      </Card>
 
+      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
         <Card className="p-5">
           <p className="text-sm font-semibold text-brand-600">Stage distribution</p>
           <div className="mt-5 space-y-4">
             {byStage.map((item) => (
               <div key={item.stage}>
-                <div className="mb-1 flex items-center justify-between text-sm">
-                  <span className="text-slate-700">{item.stage}</span>
+                <div className="mb-1 flex items-center justify-between gap-2 text-sm">
+                  <span className="truncate text-slate-700">{item.stage}</span>
                   <span className="font-semibold text-slate-900">{item.count}</span>
                 </div>
                 <div className="h-2 rounded-full bg-slate-100">
@@ -1092,9 +1094,6 @@ function Overview({ projects, decisions, onOpenProject, onSetView }) {
             ))}
           </div>
         </Card>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-3">
         <Card className="p-5">
           <p className="text-sm font-semibold text-brand-600">Health mix</p>
           <div className="mt-2 h-52">
