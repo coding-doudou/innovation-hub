@@ -2066,10 +2066,59 @@ function AgentView({ messages, draft, onDraftChange, onSubmit, onRunSuggestion }
   );
 }
 
-function SettingsView({ projects, decisions, lastSavedAt, isRemote, accountName, onImport, onExportJson, onExportCsv, onReset }) {
+function SettingsView({ projects, decisions, lastSavedAt, isRemote, accountName, onImport, onExportJson, onExportCsv, onReset, onTestConnection }) {
   const fileRef = useRef(null);
+  const [diagnostic, setDiagnostic] = useState({ status: "idle", result: null });
+
+  const runTest = async () => {
+    setDiagnostic({ status: "running", result: null });
+    try {
+      const result = await onTestConnection();
+      setDiagnostic({ status: "done", result });
+    } catch (error) {
+      setDiagnostic({
+        status: "done",
+        result: { ok: false, steps: [{ label: "Connection test failed", ok: false, detail: error instanceof Error ? error.message : String(error) }] },
+      });
+    }
+  };
+
   return (
     <div className="space-y-5">
+      {isRemote && (
+        <Card className="p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Backend connection</h3>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                Verify the app can reach the SharePoint site and both lists. Run this after IT finishes the Entra and SharePoint setup.
+              </p>
+            </div>
+            <Button variant="secondary" onClick={runTest} disabled={diagnostic.status === "running"}>
+              <RefreshCw size={16} className={diagnostic.status === "running" ? "animate-spin" : ""} />
+              {diagnostic.status === "running" ? "Testing…" : "Test connection"}
+            </Button>
+          </div>
+          {diagnostic.result && (
+            <div className="mt-4 space-y-2">
+              <div className={cx("rounded-xl px-4 py-2.5 text-sm font-semibold", diagnostic.result.ok ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700")}>
+                {diagnostic.result.ok ? "All checks passed — the shared backend is wired correctly." : "Some checks failed — see details below."}
+              </div>
+              {diagnostic.result.steps.map((step, index) => (
+                <div key={index} className="flex items-start gap-2.5 rounded-xl border border-slate-200 px-3 py-2.5">
+                  {step.ok
+                    ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-500" />
+                    : <AlertTriangle size={16} className="mt-0.5 shrink-0 text-rose-500" />}
+                  <div className="min-w-0">
+                    <p className={cx("text-sm font-medium", step.ok ? "text-slate-800" : "text-rose-700")}>{step.label}</p>
+                    {step.detail && <p className="mt-0.5 break-words text-xs text-slate-500">{step.detail}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
       <Card className="p-6">
         <h3 className="text-lg font-semibold text-slate-900">Workspace data</h3>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
@@ -2942,6 +2991,7 @@ export default function App() {
             onExportJson={exportWorkspaceJson}
             onExportCsv={() => saveCsv("innovation-projects.csv", projects)}
             onReset={reset}
+            onTestConnection={() => repository.diagnose?.() ?? Promise.resolve({ ok: false, steps: [{ label: "Diagnostics unavailable on this backend", ok: false }] })}
           />
         )}
           </div>

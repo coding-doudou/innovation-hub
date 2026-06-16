@@ -3,7 +3,7 @@
 // the record as `_spItemId` (stripped before writing, never persisted).
 
 import { sharePoint } from "../config.js";
-import { listItems, createItem, updateItem, deleteItem } from "./graphClient.js";
+import { listItems, createItem, updateItem, deleteItem, getSite, inspectList } from "./graphClient.js";
 
 const SP_ITEM_ID = "_spItemId";
 
@@ -84,4 +84,33 @@ export const sharePointRepository = {
   createDecision: (d) => decisionOps.create(d),
   updateDecision: (d) => decisionOps.update(d),
   deleteDecision: (d) => decisionOps.remove(d),
+
+  // Step-by-step connectivity check for the Settings "Test connection" button.
+  async diagnose() {
+    const steps = [];
+    let siteId = null;
+    try {
+      const site = await getSite();
+      siteId = site.id;
+      steps.push({ label: `Site reachable: ${site.displayName || sharePoint.sitePath}`, ok: true, detail: site.webUrl });
+    } catch (error) {
+      steps.push({ label: "Resolve SharePoint site", ok: false, detail: error instanceof Error ? error.message : String(error) });
+      return { ok: false, steps };
+    }
+
+    for (const listName of [sharePoint.projectsList, sharePoint.decisionsList]) {
+      try {
+        const { hasPayload, count } = await inspectList(listName);
+        steps.push({
+          label: `List "${listName}" found (${count} item${count === "1" ? "" : "s"})`,
+          ok: hasPayload,
+          detail: hasPayload ? "Payload column present" : "Missing required 'Payload' plain-text column",
+        });
+      } catch (error) {
+        steps.push({ label: `List "${listName}"`, ok: false, detail: error instanceof Error ? error.message : String(error) });
+      }
+    }
+
+    return { ok: steps.every((step) => step.ok), steps };
+  },
 };

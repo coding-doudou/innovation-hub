@@ -93,3 +93,28 @@ export async function deleteItem(listName, itemId) {
     method: "DELETE",
   });
 }
+
+// --- Diagnostics ---------------------------------------------------------
+// Used by the Settings "Test connection" button so a misconfigured backend
+// reports exactly which step failed instead of a cryptic error on first load.
+
+export async function getSite() {
+  const path = `/sites/${sharePoint.hostname}:${sharePoint.sitePath}`;
+  const site = await graphFetch(`${path}?$select=id,displayName,webUrl`);
+  return { id: site.id, displayName: site.displayName, webUrl: site.webUrl };
+}
+
+// Confirms a list is reachable and carries the required plain-text Payload
+// column, and returns a rough item count for a sanity check.
+export async function inspectList(listName) {
+  const siteId = await resolveSiteId();
+  const listId = await resolveListId(listName);
+  const columns = await graphFetch(`/sites/${siteId}/lists/${listId}/columns?$select=name,displayName`);
+  const hasPayload = (columns.value || []).some(
+    (column) => column.name === "Payload" || column.displayName === "Payload"
+  );
+  const page = await graphFetch(`/sites/${siteId}/lists/${listId}/items?$select=id&$top=1`);
+  const sampled = (page.value || []).length;
+  const hasMore = Boolean(page["@odata.nextLink"]);
+  return { hasPayload, count: hasMore ? "1+" : String(sampled) };
+}

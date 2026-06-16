@@ -64,8 +64,9 @@ The deploy workflow (`.github/workflows/deploy-pages.yml`) already passes these 
 ## D. First run
 
 1. Open the deployed site. You'll be prompted to **Sign in with Microsoft**.
-2. On the first sign-in with empty lists, the app seeds the sample portfolio into SharePoint so the workspace isn't blank.
-3. Everyone with access to the SharePoint site now sees and edits the same data.
+2. Go to **Settings → Backend connection → Test connection**. This verifies, step by step, that the app can resolve the site and that both lists exist with the required `Payload` column — so a misconfiguration surfaces a clear message instead of a cryptic load error. Green across the board means the wiring is correct.
+3. On the first sign-in with empty lists, the app seeds the sample portfolio into SharePoint so the workspace isn't blank.
+4. Everyone with access to the SharePoint site now sees and edits the same data.
 
 ---
 
