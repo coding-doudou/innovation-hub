@@ -3083,7 +3083,7 @@ export default function App() {
               </div>
             </div>
           )}
-          <div key={view} className="mx-auto max-w-7xl animate-fade-in">
+          <div key={view} className="animate-fade-in">
 
         {view === "Portfolio" && (
           <Overview projects={projects} decisions={decisions} onOpenProject={setSelectedProject} onSetView={setView} />
