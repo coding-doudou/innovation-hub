@@ -6,3 +6,7 @@ dist
 .DS_Store
 *.log
 .claude
+
+# Source spreadsheets / data drops — mapped into the app, not tracked
+*.csv
+*.xlsx

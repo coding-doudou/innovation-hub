@@ -2314,6 +2314,45 @@ export default function App() {
   const [account, setAccount] = useState(null);
   const [authChecked, setAuthChecked] = useState(!isRemoteBackend);
 
+  // One-time, additive migration so people who already have a workspace receive
+  // newly added sample initiatives without wiping their data. Bump SEED_VERSION
+  // and list the new ids in NEW_SEED_IDS whenever sample projects are added.
+  const SEED_VERSION = 2;
+  const SEED_VERSION_KEY = "iph_seed_version";
+  const NEW_SEED_IDS = [7, 8];
+
+  const mergeNewSeedProjects = async (existing) => {
+    if (isRemoteBackend) return existing; // never auto-write to the shared backend
+    let storedVersion = 0;
+    try {
+      storedVersion = Number(localStorage.getItem(SEED_VERSION_KEY)) || 0;
+    } catch {
+      storedVersion = 0;
+    }
+    if (storedVersion >= SEED_VERSION) return existing;
+
+    const existingIds = new Set(existing.map((item) => item.id));
+    const existingNames = new Set(existing.map((item) => String(item.name || "").toLowerCase()));
+    const additions = sampleProjects
+      .filter((sample) => NEW_SEED_IDS.includes(sample.id))
+      .map(normalizeProject)
+      .filter((sample) => !existingIds.has(sample.id) && !existingNames.has(String(sample.name || "").toLowerCase()));
+
+    for (const project of additions) {
+      try {
+        await repository.createProject(project);
+      } catch {
+        // best-effort; the in-memory list below still reflects the merge
+      }
+    }
+    try {
+      localStorage.setItem(SEED_VERSION_KEY, String(SEED_VERSION));
+    } catch {
+      // ignore storage failures; migration simply re-runs next load
+    }
+    return [...additions, ...existing];
+  };
+
   const seedSampleData = async () => {
     const seededProjects = [];
     for (const sample of sampleProjects) {
@@ -2347,6 +2386,8 @@ export default function App() {
         const seeded = await seedSampleData();
         projectList = seeded.projects.map(normalizeProject);
         decisionList = seeded.decisions.map(normalizeDecision);
+      } else {
+        projectList = await mergeNewSeedProjects(projectList);
       }
       setProjects(projectList);
       setDecisions(decisionList);
