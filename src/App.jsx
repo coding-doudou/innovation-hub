@@ -16,6 +16,8 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   RefreshCw,
   Search,
@@ -2294,12 +2296,36 @@ export default function App() {
   ]);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("iph_sidebar_collapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      try {
+        localStorage.setItem("iph_sidebar_collapsed", next ? "1" : "0");
+      } catch {
+        // ignore storage failures
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     const handler = (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setPaletteOpen((current) => !current);
+      }
+      // Ctrl/Cmd-B toggles the sidebar — standard "full screen workspace" shortcut.
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
+        event.preventDefault();
+        toggleSidebar();
       }
     };
     window.addEventListener("keydown", handler);
@@ -2950,7 +2976,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen text-slate-900">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-sidebar-gradient text-white lg:flex">
+      <aside className={cx("fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-sidebar-gradient text-white transition-transform duration-300 ease-in-out lg:flex", sidebarCollapsed && "lg:-translate-x-full")}>
         <div className="flex items-center gap-3 px-5 pb-5 pt-6">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15 backdrop-blur">
             <FolderKanban size={20} className="text-white" />
@@ -3001,10 +3027,18 @@ export default function App() {
         </div>
       </aside>
 
-      <div className="lg:pl-64">
+      <div className={cx("transition-[padding] duration-300 ease-in-out", sidebarCollapsed ? "lg:pl-0" : "lg:pl-64")}>
         <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/75 backdrop-blur-xl">
           <div className="flex items-center justify-between gap-3 px-4 py-3.5 lg:px-8">
             <div className="flex min-w-0 items-center gap-3">
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                title={sidebarCollapsed ? "Show sidebar (⌘B)" : "Hide sidebar (⌘B)"}
+                className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-card transition hover:border-slate-300 hover:text-slate-900 lg:inline-flex"
+              >
+                {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+              </button>
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-gradient text-white shadow-brand-sm lg:hidden">
                 <FolderKanban size={18} />
               </div>
