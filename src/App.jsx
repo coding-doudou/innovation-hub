@@ -3224,7 +3224,7 @@ export default function App() {
           </div>
           <div className="leading-tight">
             <p className="text-sm font-bold tracking-tight">Innovation Brain</p>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-brand-200/80">Maersk Portfolio</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-brand-200/80">by Maersk Innovation Team</p>
           </div>
         </div>
         <nav className="flex-1 space-y-1 px-3 py-2">
