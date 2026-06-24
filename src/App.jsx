@@ -435,6 +435,42 @@ const sampleProjects = [
       { id: "rr-t5", title: "Lock POC start date once Russ is back from vacation", owner: "Russ Shadoff", due: "2026-07-10", done: false },
     ],
   },
+  {
+    id: 10,
+    name: "Ranger AI Automated RFX",
+    productArea: "Other",
+    owner: "Doudou BA",
+    dateRequested: "2026-03-24",
+    businessFunction: "Contract Logistics / Warehousing Solutions (RFX)",
+    stakeholderName: "Yujie Su, Joseph Petruzzelli, Patrick Blinn, Valerie Amy Mango",
+    regionScope: "USA / NAM (US East Coast solution team)",
+    stage: "Scouting",
+    status: "Green",
+    priority: "High",
+    targetDate: "2026-05-08",
+    nextMilestone: "Arrange demo call with James Zhan (Ranger) and the MCL warehousing RFX team",
+    recommendation: "Continue Scouting",
+    problem: "Maersk Contract Logistics responds to complex warehousing/3PL RFX (e.g. a retailer outsourcing a fulfillment center) end to end — proposing how goods flow from inbound through processing (sorting, pick & pack) to outbound. Building these industrial proposals is manual, time-consuming, and cross-functional, limiting speed and capacity to bid.",
+    impact: "Faster, higher-quality RFX responses would let the warehousing team bid on more opportunities, improve win rates, and free expert time from repetitive proposal drafting.",
+    objectivePrimary: "Evaluate Ranger AI's automated RFX platform via a demo to the MCL warehousing RFX team and assess fit for Maersk's 3PL proposal process.",
+    objectiveSecondary: "Understand how Ranger ingests past RFX and knowledge-base content to auto-generate proposal responses (in whole or part) and automate the cross-functional workflow through review and submission.",
+    currentChallenges: "RFX responses are produced manually by the warehousing expert team. Ranger has no existing 3PL/warehousing RFX example to show, though its AI is trained on industrial proposal generation and deployed with other customers (e.g. Celeros Flow).",
+    previousSolutions: "No automated RFX tooling in place today; proposals handled manually end to end.",
+    dreamScenario: "Ranger ingests Maersk's past warehousing RFX plus knowledge base; on receipt of a new RFX it generates the response (whole or in parts), with skills automating the cross-functional process up to review and submission.",
+    implementationRisks: "No NDA in place yet (vendor comfortable demoing without one); no direct 3PL warehousing reference case; data/IP considerations around ingesting past RFX; scheduling across James (in Europe till mid next week) and the US East Coast team.",
+    resourcesRequired: "Warehousing RFX expert team (Joseph Petruzzelli, Patrick Blinn, Valerie Amy Mango), Yujie Su, and a discovery slot for Ranger to tailor the demo.",
+    scalabilityVision: "If the demo and discovery prove out, scope a focused trial on real warehousing RFX, scaling from a single warehouse to regional proposals across MCL.",
+    selectedVendor: "Ranger (rangerrfx.com)",
+    value: "Faster RFX turnaround, more bids covered, consistent high-quality proposals, and expert time redirected from drafting to strategy.",
+    blockers: "Demo date not yet confirmed; awaiting scheduling alignment between Ranger and the MCL team.",
+    notes: "Vendor: Ranger — James Zhan, CEO (james@rangerrfx.com, WhatsApp +1 778-688-8662, rangerrfx.com). Purpose: show the MCL team what an automated RFX looks like. No NDA required; Ranger wants part of the session for discovery to tailor the demo. James in Europe till mid next week, flexible after; MCL solution team on US East Coast. Yujie Su to be kept in the loop and will join if able — record the call if she cannot. Ranger AI trained on industrial proposal generation; deployed with other customers (e.g. Celeros Flow). Source: Ranger AI demo/scheduling email thread (Mar–Apr 2026).",
+    tasks: [
+      { id: "ranger-t1", title: "Arrange demo call: James Zhan (Ranger) + warehousing RFX team", owner: "Doudou BA", due: "2026-05-08", done: false },
+      { id: "ranger-t2", title: "Confirm date with James (Europe till mid next week) and US East Coast team", owner: "Doudou BA", due: "2026-05-02", done: false },
+      { id: "ranger-t3", title: "Run discovery portion so Ranger can tailor the demo", owner: "Yujie Su", due: "2026-05-08", done: false },
+      { id: "ranger-t4", title: "Record the demo call for Yujie if she cannot join", owner: "Doudou BA", due: "2026-05-08", done: false },
+    ],
+  },
 ];
 
 const sampleDecisions = [
@@ -2392,9 +2428,9 @@ export default function App() {
   // One-time, additive migration so people who already have a workspace receive
   // newly added sample initiatives without wiping their data. Bump SEED_VERSION
   // and list the new ids in NEW_SEED_IDS whenever sample projects are added.
-  const SEED_VERSION = 3;
+  const SEED_VERSION = 4;
   const SEED_VERSION_KEY = "iph_seed_version";
-  const NEW_SEED_IDS = [9];
+  const NEW_SEED_IDS = [9, 10];
 
   const mergeNewSeedProjects = async (existing) => {
     if (isRemoteBackend) return existing; // never auto-write to the shared backend
