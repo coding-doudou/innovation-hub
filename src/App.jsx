@@ -531,6 +531,52 @@ const sampleProjects = [
       { id: "lt-t5", title: "Confirm 45-day POC scope and kickoff date", owner: "Joseph Petruzzelli", due: "2026-06-30", done: false },
     ],
   },
+  {
+    id: 12,
+    name: "Innovation Brain PoC",
+    productArea: "Other",
+    owner: "Doudou BA",
+    dateRequested: "2026-06-23",
+    businessFunction: "Innovation / Internal AI Tooling",
+    stakeholderName: "Lars Krieger Andersen (Senior Engineering Manager), Yujie Su",
+    regionScope: "Global (Maersk Innovation team)",
+    stage: "POC",
+    status: "Green",
+    priority: "Strategic",
+    targetDate: "2026-07-15",
+    nextMilestone: "Enable AI model/API access via Maersk MIDAS AI LLM Gateway and confirm Claude Code credits can be used",
+    recommendation: "Iterate PoC",
+    problem: "The Innovation team's project information, decisions, and knowledge are scattered, making it hard to summarize status, retrieve prior knowledge, and collaborate. There is no centralized 'team brain' for portfolio and project management.",
+    impact: "A centralized, AI-powered tracker would let the team summarize project information on demand, retrieve institutional knowledge, and collaborate more effectively — reducing manual reporting and knowledge loss.",
+    objectivePrimary: "Build 'odyssey', an AI-powered Project Management Tracker that serves as a centralized knowledge base and team brain — summarizing project info, retrieving knowledge, and supporting collaboration. (This is the platform currently used to run the innovation portfolio.)",
+    objectiveSecondary: "Integrate the required AI capabilities via Maersk's standard operating model for model access (MIDAS AI LLM Gateway), using available Claude Code credits where possible.",
+    currentChallenges: "Need API access to AI models enabled for the team. Maersk's standard path is the MIDAS AI LLM Gateway; need to confirm whether existing Claude Code credits can be used or models enabled through the gateway, plus budget and approvals.",
+    previousSolutions: "Manual, document-based project tracking and reporting; no AI-assisted knowledge base in place.",
+    dreamScenario: "A living team brain where the Innovation team logs initiatives, decisions, and POCs, and AI summarizes status, surfaces relevant prior knowledge, and drafts updates — keeping the whole portfolio current with minimal manual effort.",
+    implementationRisks: "Dependency on enabling model/API access through MIDAS AI LLM Gateway; budget/approval gates; data governance for centralized knowledge; ensuring AI integration meets Maersk security standards.",
+    resourcesRequired: "Lars Krieger Andersen to help unblock model/API access, budget, and approvals; Doudou leading build and process; Claude Code credits already available.",
+    scalabilityVision: "Prove the innovation brain for the Innovation team, then extend the centralized knowledge base and AI assistance to adjacent teams.",
+    selectedVendor: "Internal build (Claude API via Maersk MIDAS AI LLM Gateway)",
+    value: "Centralized knowledge, on-demand project summaries, faster knowledge retrieval, and better collaboration — less time on manual reporting.",
+    blockers: "AI model/API access not yet enabled; confirmation needed on Claude Code credit usage; budget and approvals pending.",
+    notes: "Internal platform being built by Doudou — 'odyssey', an AI-powered Project Management Tracker / centralized knowledge base and team brain (the tool currently used to run this innovation portfolio). Lars Krieger Andersen (Senior Engineering Manager, A.P. Moller - Maersk, Copenhagen) is sponsoring/enabling and offered to help unblock budget, approvals, and ideas; he scoped this as a PoC of building an 'innovation brain' and asked what is required from his side. Maersk standard operating model for model access: MIDAS AI LLM Gateway (https://docs.maersk.io/midas-ai/llm-gateway). Doudou has Claude Code credits and is checking whether they can be enabled/used. Source: Claude API / Innovation Brain email thread (Jun 2026).",
+    pocHypothesis: "An AI-powered project management tracker ('Innovation Brain'/odyssey) integrating Claude via Maersk's MIDAS AI LLM Gateway can centralize knowledge, auto-summarize project information, retrieve prior knowledge, and improve collaboration for the Innovation team.",
+    pocSuccessCriteria: [
+      { id: "ib-c1", text: "Platform built and in active use by the Innovation team to run the portfolio", met: true },
+      { id: "ib-c2", text: "Requirements reviewed with Lars and scope of the 'innovation brain' PoC agreed", met: false },
+      { id: "ib-c3", text: "AI model/API access enabled via Maersk MIDAS AI LLM Gateway", met: false },
+      { id: "ib-c4", text: "Claude Code credits confirmed usable for the integration", met: false },
+      { id: "ib-c5", text: "AI summarization and knowledge-retrieval features integrated into the tracker", met: false },
+    ],
+    pocOutcome: "Pending",
+    tasks: [
+      { id: "ib-t1", title: "Review requirements doc with Lars; confirm what's needed from his side", owner: "Lars Krieger Andersen", due: "2026-06-30", done: false },
+      { id: "ib-t2", title: "Enable AI model/API access via Maersk MIDAS AI LLM Gateway", owner: "Lars Krieger Andersen", due: "2026-06-30", done: false },
+      { id: "ib-t3", title: "Confirm whether existing Claude Code credits can be used", owner: "Doudou BA", due: "2026-06-26", done: false },
+      { id: "ib-t4", title: "Integrate AI summarization & knowledge-retrieval into the tracker", owner: "Doudou BA", due: "2026-07-15", done: false },
+      { id: "ib-t5", title: "Secure budget and approvals to unblock the PoC", owner: "Lars Krieger Andersen", due: "2026-07-01", done: false },
+    ],
+  },
 ];
 
 const sampleDecisions = [
@@ -2488,9 +2534,9 @@ export default function App() {
   // One-time, additive migration so people who already have a workspace receive
   // newly added sample initiatives without wiping their data. Bump SEED_VERSION
   // and list the new ids in NEW_SEED_IDS whenever sample projects are added.
-  const SEED_VERSION = 5;
+  const SEED_VERSION = 6;
   const SEED_VERSION_KEY = "iph_seed_version";
-  const NEW_SEED_IDS = [9, 10, 11];
+  const NEW_SEED_IDS = [9, 10, 11, 12];
 
   const mergeNewSeedProjects = async (existing) => {
     if (isRemoteBackend) return existing; // never auto-write to the shared backend
