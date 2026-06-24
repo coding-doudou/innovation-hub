@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ChevronRight,
   CircleDollarSign,
+  Brain,
   ClipboardCheck,
   Download,
   Flag,
@@ -2490,7 +2491,7 @@ function SignInScreen({ onSignIn }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <Card className="w-full max-w-md p-8 text-center shadow-sm">
-        <p className="text-sm font-semibold text-brand-600">Innovation Portfolio Hub</p>
+        <p className="text-sm font-semibold text-brand-600">Innovation Brain</p>
         <h1 className="mt-2 text-2xl font-semibold text-slate-900">Sign in to continue</h1>
         <p className="mt-2 text-sm leading-6 text-slate-500">
           This workspace is shared across the team and protected by your organization account.
@@ -3219,10 +3220,10 @@ export default function App() {
       <aside className={cx("fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-sidebar-gradient text-white transition-transform duration-300 ease-in-out lg:flex", sidebarCollapsed && "lg:-translate-x-full")}>
         <div className="flex items-center gap-3 px-5 pb-5 pt-6">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15 backdrop-blur">
-            <FolderKanban size={20} className="text-white" />
+            <Brain size={20} className="text-white" />
           </div>
           <div className="leading-tight">
-            <p className="text-sm font-bold tracking-tight">Innovation Hub</p>
+            <p className="text-sm font-bold tracking-tight">Innovation Brain</p>
             <p className="text-[11px] font-semibold uppercase tracking-wider text-brand-200/80">Maersk Portfolio</p>
           </div>
         </div>
@@ -3280,7 +3281,7 @@ export default function App() {
                 {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
               </button>
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-gradient text-white shadow-brand-sm lg:hidden">
-                <FolderKanban size={18} />
+                <Brain size={18} />
               </div>
               <div className="min-w-0">
                 <h1 className="truncate text-lg font-bold tracking-tight text-slate-900 lg:text-xl">{activeNav.title}</h1>
