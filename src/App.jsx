@@ -577,6 +577,54 @@ const sampleProjects = [
       { id: "ib-t5", title: "Secure budget and approvals to unblock the PoC", owner: "Lars Krieger Andersen", due: "2026-07-01", done: false },
     ],
   },
+  {
+    id: 13,
+    name: "AI Captains PoC",
+    productArea: "AI Literacy",
+    owner: "Doudou BA",
+    dateRequested: "2026-05-13",
+    businessFunction: "Innovation / AI Literacy & Enablement",
+    stakeholderName: "Jacqueline le Mi Nguyen (APMT Technology Portfolio Office), Craig Simpson, Mark Zeitlin, Jeffrey Guss, Cheryl Basil Sequeira, Matteo Magagnoli, Adam McCarter, Yujie Su",
+    regionScope: "Global (Maersk, LNS, APM Terminals)",
+    stage: "POC",
+    status: "Amber",
+    priority: "Strategic",
+    targetDate: "2026-06-30",
+    nextMilestone: "Ship v2: balanced answer patterns, business-focused questions (strategy, impact, ROIC, adoption, risk), and multi-domain SSO",
+    recommendation: "Iterate PoC",
+    problem: "Maersk needs to baseline where teams — starting with 'AI Captains' — stand on AI fundamentals so Innovation can shape the right enablement programs. There is no structured measure of AI literacy across the org today.",
+    impact: "A reliable AI literacy baseline lets Innovation target enablement appropriately (technical vs senior/business leaders) and track uplift over time.",
+    objectivePrimary: "Pilot an AI literacy assessment for AI Captains to baseline AI fundamentals and shape enablement programs, with instant feedback on why answers are right or wrong.",
+    objectiveSecondary: "Iterate the assessment on pilot feedback — balanced answer difficulty, more business-focused and practical questions, and SSO across Maersk domains.",
+    currentChallenges: "Pilot feedback: the first 17 questions were almost all option B and the correct answer was always the longest — answer patterns and difficulty need rebalancing. Content reads as too technical for senior/business leaders. Sign-in is limited to @maersk.com SSO, excluding @lns.maersk.com and @apmterminals.com.",
+    previousSolutions: "First pilot of a structured AI literacy assessment; no prior tool.",
+    dreamScenario: "A balanced, audience-appropriate AI literacy assessment accessible across Maersk domains, giving a clear baseline and tailored enablement paths for both technical and business leaders.",
+    implementationRisks: "Question-design bias (answer-pattern / length tells); audience targeting (technical vs business); SSO/identity across multiple Maersk domains; sustained engagement.",
+    resourcesRequired: "Pilot reviewers' feedback, SSO integration for additional domains, and content updates. Built in-house by Maersk Innovation (Doudou).",
+    scalabilityVision: "After v2, open the assessment more widely beyond the pilot group across Maersk, LNS, and APM Terminals.",
+    selectedVendor: "Internal build (Maersk Innovation)",
+    value: "Structured AI literacy baseline, targeted enablement, instant learning feedback, and a strong assessment UX (well-liked visual layout and 'why' explanations).",
+    blockers: "v2 question rebalancing and business-focused content pending; multi-domain SSO (@lns.maersk.com, @apmterminals.com) not yet integrated.",
+    notes: "Internal AI literacy assessment built by Doudou (Maersk Innovation), piloted to the AI Captains review group on 13 May 2026 (~20-30 min, Maersk SSO). Reviewers: Jacqueline le Mi Nguyen (Tech Lead Portfolio Partner, APMT Technology Portfolio Office), Craig Simpson, Mark Zeitlin (LNS), Jeffrey Guss (LNS), Cheryl Basil Sequeira, Matteo Magagnoli, Adam McCarter; cc Yujie Su. Feedback (19 May): first 17 questions almost all option B with the longest answer always correct — rebalance difficulty/options; too technical for senior/business leaders — add strategy, business impact, ROIC, adoption, and risk-management questions, more practical than theoretical; praised the visual layout and instant 'why' prompts. SSO currently @maersk.com only — to add @lns.maersk.com and @apmterminals.com. Related to the broader 'AI Literacy Mapping for Leadership' initiative. Source: AI Literacy Mapping pilot email thread (May 2026).",
+    pocHypothesis: "A well-designed AI literacy assessment can baseline AI fundamentals for AI Captains and, once rebalanced and tailored by audience with multi-domain SSO, provide a reliable basis to shape and target enablement programs across Maersk.",
+    pocSuccessCriteria: [
+      { id: "aic-c1", text: "Pilot launched to the AI Captains review group (Maersk SSO sign-in)", met: true },
+      { id: "aic-c2", text: "Pilot feedback collected on questions and experience", met: true },
+      { id: "aic-c3", text: "Answer patterns balanced and difficulty calibrated (fix option-B / longest-answer bias)", met: false },
+      { id: "aic-c4", text: "Business-focused questions added (strategy, impact, ROIC, adoption, risk) for senior/business leaders", met: false },
+      { id: "aic-c5", text: "SSO integrated for additional domains (@lns.maersk.com, @apmterminals.com)", met: false },
+      { id: "aic-c6", text: "Assessment opened more widely beyond the pilot group", met: false },
+    ],
+    pocStartDate: "2026-05-13",
+    pocOutcome: "Pending",
+    tasks: [
+      { id: "aic-t1", title: "Rebalance answer patterns and calibrate difficulty (remove option-B / longest-answer bias)", owner: "Doudou BA", due: "2026-06-30", done: false },
+      { id: "aic-t2", title: "Add business-focused, practical questions (strategy, impact, ROIC, adoption, risk)", owner: "Doudou BA", due: "2026-06-30", done: false },
+      { id: "aic-t3", title: "Integrate SSO for @lns.maersk.com and @apmterminals.com", owner: "Doudou BA", due: "2026-07-07", done: false },
+      { id: "aic-t4", title: "Define target audience (technical vs senior/business leaders) and tailor question sets", owner: "Doudou BA", due: "2026-06-30", done: false },
+      { id: "aic-t5", title: "Open the assessment more widely after v2", owner: "Doudou BA", due: "2026-07-15", done: false },
+    ],
+  },
 ];
 
 const sampleDecisions = [
@@ -2534,9 +2582,9 @@ export default function App() {
   // One-time, additive migration so people who already have a workspace receive
   // newly added sample initiatives without wiping their data. Bump SEED_VERSION
   // and list the new ids in NEW_SEED_IDS whenever sample projects are added.
-  const SEED_VERSION = 6;
+  const SEED_VERSION = 7;
   const SEED_VERSION_KEY = "iph_seed_version";
-  const NEW_SEED_IDS = [9, 10, 11, 12];
+  const NEW_SEED_IDS = [9, 10, 11, 12, 13];
 
   const mergeNewSeedProjects = async (existing) => {
     if (isRemoteBackend) return existing; // never auto-write to the shared backend
