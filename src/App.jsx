@@ -484,6 +484,53 @@ const sampleProjects = [
       { id: "ranger-t7", title: "Confirm POC kickoff date after internal + external assessment", owner: "Doudou BA", due: "2026-06-30", done: false },
     ],
   },
+  {
+    id: 11,
+    name: "Logistics Terminal POC",
+    productArea: "Other",
+    owner: "Doudou BA",
+    dateRequested: "2026-06-09",
+    businessFunction: "Contract Logistics / Solution Design (scoping & pricing)",
+    stakeholderName: "Joseph Petruzzelli, Yujie Su",
+    regionScope: "USA / NAM (Charlotte, NC vendor; Maersk NAM + Stockholm)",
+    stage: "Scouting",
+    status: "Green",
+    priority: "High",
+    targetDate: "2026-06-30",
+    nextMilestone: "Run product demo, share Maersk MNDA template, and clarify fee/conversion/post-POC commercials before kickoff",
+    recommendation: "Select for PoC",
+    problem: "Scoping and pricing logistics/warehousing solutions is manual and inconsistent, making it hard to produce accurate, timely proposals. Joseph and the team described scoping and pricing challenges that align with Logistics Terminal's focus.",
+    impact: "A platform that compares favorably against Maersk's existing data sources and processes could improve the accuracy and speed of scoping and pricing, strengthening proposal quality and turnaround.",
+    financialImpact: "Commercials still open — fee, conversion, and post-POC pricing need clarification before proceeding.",
+    objectivePrimary: "Run a 45-day POC sprint to evaluate the Logistics Terminal platform within Maersk's operating environment, comparing its outputs against existing data sources at defined milestones.",
+    objectiveSecondary: "Assess product fit, architecture, and value for scoping and pricing, and provide structured feedback to the vendor.",
+    currentChallenges: "MNDA not yet in place (Maersk template to be shared); fee, conversion, and post-POC commercials need clarification; internal review with Joe and stakeholders pending; product demo not yet held.",
+    previousSolutions: "Scoping and pricing handled manually today; no comparable platform in use.",
+    dreamScenario: "Logistics Terminal's outputs validated against Maersk data over a 45-day sprint, demonstrating clear accuracy and efficiency gains that justify conversion to an ongoing solution.",
+    implementationRisks: "Open commercial terms (fee, conversion, post-POC); MNDA signature pending; need clean comparison data; alignment across NAM and Stockholm time zones; vendor is early-stage (founder-led).",
+    resourcesRequired: "Joseph Petruzzelli, Doudou BA, relevant stakeholders, Maersk MNDA template, and existing data sources for comparison. Vendor: Logistics Terminal (Jordan Lawrence, Jeff Graham).",
+    scalabilityVision: "If the 45-day POC proves out, scope conversion to a broader scoping-and-pricing solution across MCL pursuits.",
+    selectedVendor: "Logistics Terminal, Inc.",
+    value: "Faster, more accurate scoping and pricing; structured comparison against current data; and a clear basis to decide on conversion.",
+    blockers: "MNDA not signed; fee, conversion, and post-POC commercials unresolved; internal review pending.",
+    notes: "Vendor: Logistics Terminal, Inc. (Charlotte, NC — www.LogisticsTerminal.com). Contacts: Jordan Lawrence, Founder (jordan@logisticsterminal.com, +1 919-272-1810); Jeff Graham (jeff.graham@logisticsterminal.com). Joseph Petruzzelli initiated the POC; Doudou supporting and working closely with the vendor throughout. Logistics Terminal shared a 45-day POC sprint framework with milestones comparing Maersk's existing data sources against its outputs. MNDA: Maersk to share its template for vendor review/sign. Open items: fee, conversion, and post-POC commercials. Product demo being scheduled (Jordan available 8:30-11 AM EST, ~Doudou's afternoon in Stockholm; Doudou off rest of that week). Source: Logistics Terminal POC kickoff email thread (Jun 2026).",
+    pocHypothesis: "A 45-day POC sprint comparing Logistics Terminal's outputs against Maersk's existing data sources and processes will demonstrate measurable accuracy and efficiency gains in scoping and pricing, justifying conversion.",
+    pocSuccessCriteria: [
+      { id: "lt-c1", text: "MNDA signed on Maersk template", met: false },
+      { id: "lt-c2", text: "45-day POC framework and milestones reviewed and agreed internally", met: false },
+      { id: "lt-c3", text: "Fee, conversion, and post-POC commercials clarified", met: false },
+      { id: "lt-c4", text: "Platform outputs compared against Maersk existing data sources at sprint milestones", met: false },
+      { id: "lt-c5", text: "Product demo completed and feedback captured", met: false },
+    ],
+    pocOutcome: "Pending",
+    tasks: [
+      { id: "lt-t1", title: "Schedule product demo with Jordan (8:30-11 AM EST) and capture feedback", owner: "Doudou BA", due: "2026-06-16", done: false },
+      { id: "lt-t2", title: "Review 45-day POC framework internally with Joe and stakeholders", owner: "Doudou BA", due: "2026-06-20", done: false },
+      { id: "lt-t3", title: "Share Maersk MNDA template for Logistics Terminal to review/sign", owner: "Doudou BA", due: "2026-06-18", done: false },
+      { id: "lt-t4", title: "Clarify fee, conversion, and post-POC commercials", owner: "Doudou BA", due: "2026-06-20", done: false },
+      { id: "lt-t5", title: "Confirm 45-day POC scope and kickoff date", owner: "Joseph Petruzzelli", due: "2026-06-30", done: false },
+    ],
+  },
 ];
 
 const sampleDecisions = [
@@ -2441,9 +2488,9 @@ export default function App() {
   // One-time, additive migration so people who already have a workspace receive
   // newly added sample initiatives without wiping their data. Bump SEED_VERSION
   // and list the new ids in NEW_SEED_IDS whenever sample projects are added.
-  const SEED_VERSION = 4;
+  const SEED_VERSION = 5;
   const SEED_VERSION_KEY = "iph_seed_version";
-  const NEW_SEED_IDS = [9, 10];
+  const NEW_SEED_IDS = [9, 10, 11];
 
   const mergeNewSeedProjects = async (existing) => {
     if (isRemoteBackend) return existing; // never auto-write to the shared backend
