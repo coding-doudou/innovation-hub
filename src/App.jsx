@@ -385,6 +385,56 @@ const sampleProjects = [
       { id: "mectool-t6", title: "Vendor allocation mix and procurement", owner: "Core Team", due: "2026-06-20", done: false },
     ],
   },
+  {
+    id: 9,
+    name: "RetailReady Compliance Label POC",
+    productArea: "Other",
+    owner: "Doudou BA",
+    dateRequested: "2026-06-12",
+    businessFunction: "Retail Compliance / WMS Engineering",
+    stakeholderName: "Russ Shadoff, Jacob Pazitka, Yujie Su, Scott Fairley",
+    regionScope: "USA / NAM (Maersk Contract Logistics)",
+    stage: "POC",
+    status: "Amber",
+    priority: "Strategic",
+    targetDate: "2026-06-30",
+    nextMilestone: "Hold value-prop alignment call (Jacob, Su, Doudou + Elle), then lock POC start date once Russ is back",
+    recommendation: "Select for PoC",
+    problem: "Maersk Contract Logistics must implement and maintain retailer compliance for clients faster and more efficiently. Building and maintaining retailer-specific compliance label templates is slow and high-touch, and the broader compliance / chargeback-dispute workflow is largely manual across site operations.",
+    impact: "Slow, manual compliance handling lengthens client onboarding, raises TCO for implementing and maintaining compliance clients, and exposes the business to retailer chargebacks. A narrow label-only view understates the value; stakeholders across site ops and leadership need a compelling case to engage.",
+    financialImpact: "Upside spans faster time-to-market for new compliance clients, lower implementation/maintenance TCO, site-ops productivity and training gains, and chargeback savings. Quantified estimates to be developed per stakeholder group.",
+    objectivePrimary: "Run a POC of RetailReady's compliance label generation API: a single API call per container returns a retailer-compliant ZPL label with no custom template maintenance on Maersk's side.",
+    objectiveSecondary: "Build a clear value proposition beyond label printing — positioning RetailReady as a compliance engine and chargeback-dispute partner across TCO/implementation, site ops users, site ops leadership, and MCL leadership.",
+    currentChallenges: "Speed-to-market on labels is only part of the value and has proven less enticing than expected. The non-printing feature set (compliance partnership, chargeback dispute support, portal/guides for site ops) needs to be detailed to engage the full stakeholder set. Retailer/merchant test pairs not yet identified.",
+    previousSolutions: "Compliance label templates currently built and maintained manually per retailer. The Amazon FBM integration pattern already exists internally and can be reused, keeping Maersk-side dev lift minimal.",
+    dreamScenario: "RetailReady serves as Maersk's compliance engine: transparent, compliant labels generated on demand via API, plus portal/guides that make daily site operations faster and easier, measurable productivity and training improvements, and chargeback savings — building a sustainable partnership beyond a label POC.",
+    implementationRisks: "Need a strong, differentiated value proposition for each stakeholder group to gain and keep engagement; dependency on internal sign-offs and contractual alignment before kickoff; scheduling constraints (Elle traveling, Russ on vacation); retailer/merchant test-pair selection still open.",
+    resourcesRequired: "WMS engineering (reuse of Amazon FBM integration pattern), site ops input, internal sign-offs, and contractual alignment. Vendor: RetailReady AI (Elle Smyth, Co-Founder/CEO).",
+    scalabilityVision: "Start with a focused label-generation POC on selected retailer/merchant pairs, then scale RetailReady into a broader compliance and chargeback-dispute engine across MCL NAM and beyond.",
+    selectedVendor: "RetailReady AI",
+    value: "Faster, more efficient retail compliance implementation; transparent compliant labels for site ops; productivity, training, and chargeback-savings gains; and a reusable compliance engine for Maersk.",
+    blockers: "Pending internal sign-offs and contractual alignment; POC start date not locked (waiting on Russ's return); retailer/merchant test pairs not yet identified.",
+    notes: "Vendor: RetailReady AI (retailreadyai.com, Y Combinator) — Elle Smyth, Co-Founder/CEO. MNDA signed 15 Jun 2026. POC doc + pricing prepared with Russ Shadoff. Stakeholder groups to win over: TCO/Implementation, site ops users, site ops leadership, MCL leadership. Russ's proposed 30-min slots (EST) for the alignment call: Tue 23 Jun 1:30/3:00/4:30; Wed 24 Jun 9:30/2:30/3:30/4:00/4:30; Thu 25 Jun 2:00-4:30; Fri 26 Jun 9:30/10:00/10:30/2:30/4:00. Source: Maersk / RR POC kickoff email thread (Jun 2026).",
+    pocHypothesis: "A single RetailReady API call per container can return a retailer-compliant ZPL label with no custom template maintenance, reusing the existing Amazon FBM integration pattern for minimal Maersk dev lift — while a detailed non-printing value proposition (compliance partnership, chargeback dispute, site-ops portal/guides) makes the case for a broader, sustainable partnership.",
+    pocSuccessCriteria: [
+      { id: "rr-c1", text: "MNDA signed", met: true },
+      { id: "rr-c2", text: "POC scope confirmed: compliance label generation API layer", met: true },
+      { id: "rr-c3", text: "Single API call per container returns a retailer-compliant ZPL label", met: false },
+      { id: "rr-c4", text: "Retailer/merchant test pairs identified and coverage confirmed", met: false },
+      { id: "rr-c5", text: "Value proposition detailed for each stakeholder group (TCO, site ops users, site ops leadership, MCL leadership)", met: false },
+      { id: "rr-c6", text: "Internal sign-offs and contractual alignment complete; start date locked", met: false },
+    ],
+    pocStartDate: "2026-06-12",
+    pocEndDate: "2026-07-31",
+    pocOutcome: "Pending",
+    tasks: [
+      { id: "rr-t1", title: "Schedule 30-min value-prop alignment call (Jacob, Su, Doudou + Elle) using Russ's proposed slots", owner: "Doudou BA", due: "2026-06-26", done: false },
+      { id: "rr-t2", title: "Detail non-printing value props (compliance partner, chargeback dispute) per stakeholder group", owner: "Russ Shadoff", due: "2026-06-30", done: false },
+      { id: "rr-t3", title: "Identify retailer/merchant test pairs and confirm RetailReady coverage", owner: "Doudou BA", due: "2026-06-30", done: false },
+      { id: "rr-t4", title: "Complete internal sign-offs and contractual alignment", owner: "Russ Shadoff", due: "2026-07-10", done: false },
+      { id: "rr-t5", title: "Lock POC start date once Russ is back from vacation", owner: "Russ Shadoff", due: "2026-07-10", done: false },
+    ],
+  },
 ];
 
 const sampleDecisions = [
@@ -2342,9 +2392,9 @@ export default function App() {
   // One-time, additive migration so people who already have a workspace receive
   // newly added sample initiatives without wiping their data. Bump SEED_VERSION
   // and list the new ids in NEW_SEED_IDS whenever sample projects are added.
-  const SEED_VERSION = 2;
+  const SEED_VERSION = 3;
   const SEED_VERSION_KEY = "iph_seed_version";
-  const NEW_SEED_IDS = [7, 8];
+  const NEW_SEED_IDS = [9];
 
   const mergeNewSeedProjects = async (existing) => {
     if (isRemoteBackend) return existing; // never auto-write to the shared backend
