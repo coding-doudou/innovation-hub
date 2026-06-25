@@ -2426,26 +2426,29 @@ function ProjectDetail({ project, decisions, onClose, onEdit, onDelete, onAdvanc
                   </p>
                 </Card>
 
-                <TasksCard project={project} onAddTask={onAddTask} onToggleTask={onToggleTask} onRemoveTask={onRemoveTask} />
-
-                <DocumentsCard project={project} onAddDocuments={onAddDocuments} onRemoveDocument={onRemoveDocument} />
-
-                <Card className="border-slate-200/80 p-6">
-                  <p className="text-sm font-semibold text-slate-900">Activity</p>
-                  <div className="mt-3 space-y-3">
-                    {(project.activity || []).length === 0 ? (
-                      <p className="text-sm leading-6 text-slate-500">No activity recorded yet.</p>
-                    ) : (
-                      project.activity.slice(0, 6).map((entry) => (
-                        <div key={entry.id} className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
-                          <p className="text-sm font-medium text-slate-800">{entry.text}</p>
-                          <p className="mt-1 text-xs text-slate-500">{new Date(entry.at).toLocaleString()}</p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </Card>
               </div>
+            </div>
+
+            <div className="mt-6 grid items-start gap-4 lg:grid-cols-3">
+              <TasksCard project={project} onAddTask={onAddTask} onToggleTask={onToggleTask} onRemoveTask={onRemoveTask} />
+
+              <DocumentsCard project={project} onAddDocuments={onAddDocuments} onRemoveDocument={onRemoveDocument} />
+
+              <Card className="border-slate-200/80 p-5">
+                <p className="flex items-center gap-2 text-sm font-semibold text-slate-900"><RefreshCw size={15} className="text-brand-600" /> Activity</p>
+                <div className="mt-3 space-y-2">
+                  {(project.activity || []).length === 0 ? (
+                    <p className="text-sm leading-6 text-slate-500">No activity recorded yet.</p>
+                  ) : (
+                    project.activity.slice(0, 6).map((entry) => (
+                      <div key={entry.id} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                        <p className="text-sm font-medium text-slate-800">{entry.text}</p>
+                        <p className="mt-1 text-xs text-slate-500">{new Date(entry.at).toLocaleString()}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </Card>
             </div>
           </div>
         </Card>
