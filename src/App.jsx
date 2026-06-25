@@ -2382,7 +2382,7 @@ function ProjectDetail({ project, decisions, onClose, onEdit, onDelete, onAdvanc
               <div>
                 {stageCards[activeStageTab]}
               </div>
-              <div className="grid items-start gap-4 lg:grid-cols-3">
+              <div className="grid items-start gap-4 lg:grid-cols-2">
                 <Card className="border-slate-200/80 bg-slate-50/60 p-6">
                   <p className="text-sm font-semibold text-brand-600">Decision guide</p>
                   <h4 className="mt-2 text-xl font-semibold text-slate-900">{decisionGuide.title}</h4>
@@ -2397,58 +2397,61 @@ function ProjectDetail({ project, decisions, onClose, onEdit, onDelete, onAdvanc
                   </div>
                 </Card>
 
-                <Card className="border-slate-200/80 p-6">
-                  <p className="text-sm font-semibold text-slate-900">Readiness check</p>
-                  {decisionGuide.missing.length === 0 ? (
-                    <p className="mt-3 text-sm leading-6 text-emerald-700">The key inputs for this stage are in place.</p>
-                  ) : (
-                    <div className="mt-3">
-                      <p className="text-sm leading-6 text-slate-600">Complete these before advancing:</p>
-                      <ul className="mt-3 space-y-2 text-sm text-slate-700">
-                        {decisionGuide.missing.map((item) => (
-                          <li key={item} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </Card>
+                <div className="space-y-4">
+                  <Card className="border-slate-200/80 p-6">
+                    <p className="text-sm font-semibold text-slate-900">Readiness check</p>
+                    {decisionGuide.missing.length === 0 ? (
+                      <p className="mt-3 text-sm leading-6 text-emerald-700">The key inputs for this stage are in place.</p>
+                    ) : (
+                      <div className="mt-3">
+                        <p className="text-sm leading-6 text-slate-600">Complete these before advancing:</p>
+                        <ul className="mt-3 space-y-2 text-sm text-slate-700">
+                          {decisionGuide.missing.map((item) => (
+                            <li key={item} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </Card>
 
-                <Card className="border-slate-200/80 p-6">
-                  <p className="text-sm font-semibold text-slate-900">Recommended action</p>
-                  <p className="mt-3 text-sm leading-6 text-slate-600">
-                    {activeStageTab === project.stage && upcoming
-                      ? `If this stage is complete, advance the project to ${upcoming}.`
-                      : activeStageIndex < stageIndex
-                        ? "This stage is already complete. Review it only if context needs to be revisited."
-                        : "Use this stage to prepare the next workflow step and confirm the required inputs."}
-                  </p>
-                </Card>
-
+                  <Card className="border-slate-200/80 p-6">
+                    <p className="text-sm font-semibold text-slate-900">Recommended action</p>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">
+                      {activeStageTab === project.stage && upcoming
+                        ? `If this stage is complete, advance the project to ${upcoming}.`
+                        : activeStageIndex < stageIndex
+                          ? "This stage is already complete. Review it only if context needs to be revisited."
+                          : "Use this stage to prepare the next workflow step and confirm the required inputs."}
+                    </p>
+                  </Card>
+                </div>
               </div>
             </div>
 
-            <div className="mt-6 grid items-start gap-4 lg:grid-cols-3">
+            <div className="mt-6 grid items-start gap-4 lg:grid-cols-2">
               <TasksCard project={project} onAddTask={onAddTask} onToggleTask={onToggleTask} onRemoveTask={onRemoveTask} />
 
-              <DocumentsCard project={project} onAddDocuments={onAddDocuments} onRemoveDocument={onRemoveDocument} />
+              <div className="space-y-4">
+                <DocumentsCard project={project} onAddDocuments={onAddDocuments} onRemoveDocument={onRemoveDocument} />
 
-              <Card className="border-slate-200/80 p-5">
-                <p className="flex items-center gap-2 text-sm font-semibold text-slate-900"><RefreshCw size={15} className="text-brand-600" /> Activity</p>
-                <div className="mt-3 space-y-2">
-                  {(project.activity || []).length === 0 ? (
-                    <p className="text-sm leading-6 text-slate-500">No activity recorded yet.</p>
-                  ) : (
-                    project.activity.slice(0, 6).map((entry) => (
-                      <div key={entry.id} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-                        <p className="text-sm font-medium text-slate-800">{entry.text}</p>
-                        <p className="mt-1 text-xs text-slate-500">{new Date(entry.at).toLocaleString()}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </Card>
+                <Card className="border-slate-200/80 p-5">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-slate-900"><RefreshCw size={15} className="text-brand-600" /> Activity</p>
+                  <div className="mt-3 space-y-2">
+                    {(project.activity || []).length === 0 ? (
+                      <p className="text-sm leading-6 text-slate-500">No activity recorded yet.</p>
+                    ) : (
+                      project.activity.slice(0, 6).map((entry) => (
+                        <div key={entry.id} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                          <p className="text-sm font-medium text-slate-800">{entry.text}</p>
+                          <p className="mt-1 text-xs text-slate-500">{new Date(entry.at).toLocaleString()}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </Card>
+              </div>
             </div>
           </div>
         </Card>
