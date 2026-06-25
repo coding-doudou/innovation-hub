@@ -10,6 +10,8 @@ import {
   Brain,
   ClipboardCheck,
   Download,
+  ExternalLink,
+  FileText,
   Flag,
   FlaskConical,
   FolderKanban,
@@ -17,6 +19,7 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
+  Paperclip,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -30,6 +33,7 @@ import {
 } from "lucide-react";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip } from "recharts";
 import { repository } from "./data/repository.js";
+import { putDoc, getDoc, deleteDoc } from "./lib/docStore.js";
 import { isRemoteBackend } from "./config.js";
 import { initAuth, login, logout, getActiveAccount } from "./auth/msalClient.js";
 import {
@@ -874,6 +878,122 @@ function TasksCard({ project, onAddTask, onToggleTask, onRemoveTask }) {
           <Button type="button" variant="secondary" className="shrink-0 px-3 py-2" onClick={add}><Plus size={15} /></Button>
         </div>
       </div>
+    </Card>
+  );
+}
+
+function formatBytes(bytes) {
+  const n = Number(bytes) || 0;
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+const MAX_DOC_BYTES = 25 * 1024 * 1024; // 25 MB per file guardrail
+
+function DocumentsCard({ project, onAddDocuments, onRemoveDocument }) {
+  const documents = project.documents || [];
+  const inputRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleFiles = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (files.length === 0) return;
+    setError("");
+    setBusy(true);
+    const added = [];
+    try {
+      for (const file of files) {
+        if (file.size > MAX_DOC_BYTES) {
+          setError(`${file.name} is larger than 25 MB and was skipped.`);
+          continue;
+        }
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        await putDoc(id, file);
+        added.push({ id, name: file.name, type: file.type || "", size: file.size, addedAt: new Date().toISOString() });
+      }
+      if (added.length) onAddDocuments(project.id, added);
+    } catch {
+      setError("Could not store the file in this browser.");
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  const openDoc = async (meta, forceDownload = false) => {
+    const blob = await getDoc(meta.id);
+    if (!blob) {
+      setError(`"${meta.name}" was uploaded in another browser and isn't stored here.`);
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    if (forceDownload) {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = meta.name;
+      link.click();
+    } else {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
+
+  return (
+    <Card className="border-slate-200/80 p-6">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Paperclip size={15} className="text-brand-600" /> Documents</p>
+        {documents.length > 0 && <span className="text-xs font-semibold text-slate-500">{documents.length} file{documents.length === 1 ? "" : "s"}</span>}
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {documents.length === 0 ? (
+          <p className="text-sm leading-6 text-slate-500">No documents yet. Upload POA packages, decks, or reference files to keep them with the project.</p>
+        ) : (
+          documents.map((doc) => (
+            <div key={doc.id} className="group flex items-start gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+              <FileText size={16} className="mt-0.5 shrink-0 text-slate-400" />
+              <div className="min-w-0 flex-1">
+                <button
+                  type="button"
+                  onClick={() => openDoc(doc)}
+                  className="block truncate text-left text-sm font-medium text-slate-800 hover:text-brand-600 hover:underline"
+                  title={`Open ${doc.name}`}
+                >
+                  {doc.name}
+                </button>
+                <p className="mt-0.5 text-xs text-slate-500">{formatBytes(doc.size)}{doc.addedAt ? ` · ${new Date(doc.addedAt).toLocaleDateString()}` : ""}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100">
+                <button type="button" onClick={() => openDoc(doc)} className="rounded-lg p-1 text-slate-400 hover:bg-brand-50 hover:text-brand-600" title="Open in new tab"><ExternalLink size={14} /></button>
+                <button type="button" onClick={() => openDoc(doc, true)} className="rounded-lg p-1 text-slate-400 hover:bg-brand-50 hover:text-brand-600" title="Download"><Download size={14} /></button>
+                <button type="button" onClick={() => onRemoveDocument(project.id, doc.id)} className="rounded-lg p-1 text-slate-300 hover:bg-rose-50 hover:text-rose-600" title="Remove"><Trash2 size={14} /></button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {error && <p className="mt-3 text-xs leading-5 text-rose-600">{error}</p>}
+
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(event) => handleFiles(event.target.files)}
+      />
+      <Button
+        type="button"
+        variant="secondary"
+        className="mt-3 w-full justify-center"
+        disabled={busy}
+        onClick={() => inputRef.current && inputRef.current.click()}
+      >
+        <Upload size={15} /> {busy ? "Uploading…" : "Upload documents"}
+      </Button>
+      <p className="mt-2 text-[11px] leading-4 text-slate-400">Stored in this browser. Up to 25 MB per file.</p>
     </Card>
   );
 }
@@ -1876,7 +1996,7 @@ function PocCharterPanel({ project }) {
   );
 }
 
-function ProjectDetail({ project, decisions, onClose, onEdit, onDelete, onAdvanceStage, onAddTask, onToggleTask, onRemoveTask }) {
+function ProjectDetail({ project, decisions, onClose, onEdit, onDelete, onAdvanceStage, onAddTask, onToggleTask, onRemoveTask, onAddDocuments, onRemoveDocument }) {
   if (!project) return null;
   const relatedDecisions = decisions.filter((decision) => decision.project === project.name && decision.status !== "Closed");
   const upcoming = nextStage(project.stage);
@@ -2263,6 +2383,8 @@ function ProjectDetail({ project, decisions, onClose, onEdit, onDelete, onAdvanc
                 </Card>
 
                 <TasksCard project={project} onAddTask={onAddTask} onToggleTask={onToggleTask} onRemoveTask={onRemoveTask} />
+
+                <DocumentsCard project={project} onAddDocuments={onAddDocuments} onRemoveDocument={onRemoveDocument} />
 
                 <Card className="border-slate-200/80 p-6">
                   <p className="text-sm font-semibold text-slate-900">Activity</p>
@@ -2853,6 +2975,23 @@ export default function App() {
     const task = (project.tasks || []).find((item) => item.id === taskId);
     if (!task) return;
     patchProject(projectId, { tasks: (project.tasks || []).filter((item) => item.id !== taskId) }, `Task removed: ${task.title}`);
+  };
+
+  // Project documents — metadata lives on the project, bytes in IndexedDB.
+  const addDocuments = (projectId, docs) => {
+    const project = projects.find((item) => item.id === projectId);
+    if (!project || !docs?.length) return;
+    const label = docs.length === 1 ? `Document added: ${docs[0].name}` : `${docs.length} documents added.`;
+    patchProject(projectId, { documents: [...(project.documents || []), ...docs] }, label);
+  };
+
+  const removeDocument = (projectId, docId) => {
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) return;
+    const doc = (project.documents || []).find((item) => item.id === docId);
+    if (!doc) return;
+    deleteDoc(docId);
+    patchProject(projectId, { documents: (project.documents || []).filter((item) => item.id !== docId) }, `Document removed: ${doc.name}`);
   };
 
   // PoC Hub interactions.
@@ -3476,6 +3615,8 @@ export default function App() {
           onAddTask={addTask}
           onToggleTask={toggleTask}
           onRemoveTask={removeTask}
+          onAddDocuments={addDocuments}
+          onRemoveDocument={removeDocument}
         />
       )}
 

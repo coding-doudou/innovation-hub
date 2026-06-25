@@ -101,6 +101,7 @@ export const emptyProject = {
   notes: "",
   activity: [],
   tasks: [],
+  documents: [],
   pocHypothesis: "",
   pocSuccessCriteria: [],
   pocStartDate: "",
