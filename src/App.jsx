@@ -2378,11 +2378,11 @@ function ProjectDetail({ project, decisions, onClose, onEdit, onDelete, onAdvanc
             </div>
           </div>
           <div className="p-6">
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="space-y-6">
               <div>
                 {stageCards[activeStageTab]}
               </div>
-              <div className="space-y-4">
+              <div className="grid items-start gap-4 lg:grid-cols-3">
                 <Card className="border-slate-200/80 bg-slate-50/60 p-6">
                   <p className="text-sm font-semibold text-brand-600">Decision guide</p>
                   <h4 className="mt-2 text-xl font-semibold text-slate-900">{decisionGuide.title}</h4>
