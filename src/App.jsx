@@ -33,6 +33,7 @@ import {
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip } from "recharts";
 import { repository } from "./data/repository.js";
 import { putDoc, getDoc, deleteDoc } from "./lib/docStore.js";
+import { loadAiConfig, saveAiConfig, resolvedBaseUrl, isAiConfigured, chatComplete, vibeHosts } from "./lib/aiClient.js";
 import { isRemoteBackend } from "./config.js";
 import { initAuth, login, logout, getActiveAccount } from "./auth/msalClient.js";
 import {
@@ -2622,6 +2623,74 @@ function AgentView({ messages, draft, onDraftChange, onSubmit, onRunSuggestion }
   );
 }
 
+function AiSettingsCard() {
+  const [cfg, setCfg] = useState(() => loadAiConfig());
+  const [status, setStatus] = useState({ state: "idle", msg: "" });
+  const set = (key, value) => setCfg((current) => ({ ...current, [key]: value }));
+  const configured = isAiConfigured(cfg);
+
+  const save = () => {
+    saveAiConfig(cfg);
+    setStatus({ state: "saved", msg: "Saved. The AI workspace will use these settings." });
+  };
+
+  const test = async () => {
+    saveAiConfig(cfg);
+    setStatus({ state: "testing", msg: "" });
+    try {
+      const reply = await chatComplete({
+        apiKey: cfg.apiKey,
+        model: cfg.model,
+        baseUrl: resolvedBaseUrl(cfg),
+        messages: [{ role: "user", content: "Reply with the single word: pong" }],
+      });
+      setStatus({ state: "ok", msg: `Connected. Model replied: "${reply.slice(0, 80)}"` });
+    } catch (error) {
+      setStatus({ state: "error", msg: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
+  return (
+    <Card className="p-6">
+      <div className="flex items-center gap-2">
+        <Bot size={18} className="text-brand-600" />
+        <h3 className="text-lg font-semibold text-slate-900">AI assistant (Vibe Gateway)</h3>
+      </div>
+      <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+        Connect Maersk's MIDAS AI Vibe Gateway to power the AI workspace with real answers grounded in your portfolio. Provision a key with <span className="font-medium text-slate-700">vibecli</span>, then paste it here. The key is stored only in this browser and sent directly to the gateway.
+      </p>
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <Field label="Environment">
+          <Select value={cfg.env} onChange={(e) => set("env", e.target.value)} options={["nonprod", "prod"]} />
+        </Field>
+        <Field label="Model">
+          <Input value={cfg.model} onChange={(e) => set("model", e.target.value)} placeholder="e.g. gpt-4o or a model from your collection" />
+        </Field>
+        <Field label="API key" wide>
+          <Input type="password" value={cfg.apiKey} onChange={(e) => set("apiKey", e.target.value)} placeholder="sk-… (from vibecli)" />
+        </Field>
+        <Field label="Base URL override (optional)" wide>
+          <Input value={cfg.baseUrl} onChange={(e) => set("baseUrl", e.target.value)} placeholder={`${vibeHosts[cfg.env] || vibeHosts.nonprod}/v1`} />
+        </Field>
+      </div>
+      <p className="mt-2 text-xs text-slate-400">Resolved endpoint: {resolvedBaseUrl(cfg)}/chat/completions</p>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <Button onClick={save}>Save</Button>
+        <Button variant="secondary" onClick={test} disabled={!configured || status.state === "testing"}>
+          <RefreshCw size={16} className={status.state === "testing" ? "animate-spin" : ""} />
+          {status.state === "testing" ? "Testing…" : "Test connection"}
+        </Button>
+        {!configured && <span className="text-xs text-slate-400">Enter a model and API key to test.</span>}
+      </div>
+      {status.msg && (
+        <div className={cx("mt-4 rounded-xl px-4 py-2.5 text-sm", status.state === "error" ? "bg-rose-50 text-rose-700" : status.state === "ok" ? "bg-emerald-50 text-emerald-700" : "bg-slate-50 text-slate-600")}>
+          {status.msg}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function SettingsView({ projects, decisions, lastSavedAt, isRemote, accountName, onImport, onExportJson, onExportCsv, onReset, onTestConnection }) {
   const fileRef = useRef(null);
   const [diagnostic, setDiagnostic] = useState({ status: "idle", result: null });
@@ -2702,6 +2771,8 @@ function SettingsView({ projects, decisions, lastSavedAt, isRemote, accountName,
         </div>
         <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={onImport} />
       </Card>
+
+      <AiSettingsCard />
     </div>
   );
 }
@@ -2982,6 +3053,64 @@ export default function App() {
     setAgentMessages((current) => [...current, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, role, text }]);
   };
 
+  const appendAgentMessageReturnId = (role, text) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setAgentMessages((current) => [...current, { id, role, text }]);
+    return id;
+  };
+
+  const updateAgentMessage = (id, text) => {
+    setAgentMessages((current) => current.map((message) => (message.id === id ? { ...message, text } : message)));
+  };
+
+  const buildPortfolioContext = () => {
+    const projectLines = projects.map(
+      (p) => `- ${p.name} | ${p.productArea} | stage: ${p.stage} | status: ${p.status} | priority: ${p.priority} | owner: ${p.owner || "?"} | target: ${p.targetDate || "n/a"} | next: ${p.nextMilestone || "n/a"}`
+    );
+    const openDecisions = decisions
+      .filter((d) => d.status !== "Closed")
+      .map((d) => `- ${d.decision} (${d.project}) due ${d.due || "n/a"}`);
+    return [
+      `Portfolio — ${projects.length} projects:`,
+      projectLines.join("\n") || "- none",
+      "",
+      `Open decisions — ${openDecisions.length}:`,
+      openDecisions.join("\n") || "- none",
+    ].join("\n");
+  };
+
+  const answerWithGateway = async (input) => {
+    const cfg = loadAiConfig();
+    const thinkingId = appendAgentMessageReturnId("assistant", "Thinking…");
+    try {
+      const history = agentMessages
+        .filter((m) => m.id !== "agent-welcome")
+        .slice(-8)
+        .map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
+      const reply = await chatComplete({
+        apiKey: cfg.apiKey,
+        model: cfg.model,
+        baseUrl: resolvedBaseUrl(cfg),
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are the Innovation Brain assistant for Maersk's Innovation team — a centralized knowledge base and team brain for the project portfolio. Answer concisely and specifically using the portfolio context below. To change data, tell the user the in-chat command (e.g. \"Set <project> status to Red\") or to edit it in the UI; do not claim to have changed anything yourself.\n\n" +
+              buildPortfolioContext(),
+          },
+          ...history,
+          { role: "user", content: input },
+        ],
+      });
+      updateAgentMessage(thinkingId, reply);
+    } catch (error) {
+      updateAgentMessage(
+        thinkingId,
+        `AI request failed.\n\n${error instanceof Error ? error.message : String(error)}\n\nCheck the key, model, and environment in Settings → AI assistant.`
+      );
+    }
+  };
+
   const patchProject = (projectId, patch, activityText) => {
     const project = projects.find((item) => item.id === projectId);
     if (!project) return null;
@@ -3227,7 +3356,7 @@ export default function App() {
     setLastSavedAt(new Date().toISOString());
   };
 
-  const runAgent = (prompt) => {
+  const runAgent = async (prompt) => {
     const input = prompt.trim();
     if (!input) return;
 
@@ -3408,9 +3537,14 @@ export default function App() {
       return;
     }
 
+    if (isAiConfigured(loadAiConfig())) {
+      await answerWithGateway(input);
+      return;
+    }
+
     appendAgentMessage(
       "assistant",
-      "I can summarize the portfolio, show at-risk work or active PoCs, open a project, advance a project, add tasks (\"Add task to <project>: <task>\"), or update fields like status, priority, owner, target date, recommendation, and next milestone."
+      "I can summarize the portfolio, show at-risk work or active PoCs, open a project, advance a project, add tasks (\"Add task to <project>: <task>\"), or update fields like status, priority, owner, target date, recommendation, and next milestone.\n\nTip: add a Vibe Gateway API key in Settings → AI assistant to unlock open-ended AI answers grounded in your portfolio."
     );
   };
 
