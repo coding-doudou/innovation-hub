@@ -11,7 +11,6 @@ import {
   ClipboardCheck,
   Download,
   ExternalLink,
-  FileText,
   Flag,
   FlaskConical,
   FolderKanban,
@@ -891,11 +890,36 @@ function formatBytes(bytes) {
 
 const MAX_DOC_BYTES = 25 * 1024 * 1024; // 25 MB per file guardrail
 
+const DOC_KINDS = {
+  pdf: "bg-rose-50 text-rose-600 ring-rose-100",
+  doc: "bg-blue-50 text-blue-600 ring-blue-100",
+  docx: "bg-blue-50 text-blue-600 ring-blue-100",
+  xls: "bg-emerald-50 text-emerald-600 ring-emerald-100",
+  xlsx: "bg-emerald-50 text-emerald-600 ring-emerald-100",
+  csv: "bg-emerald-50 text-emerald-600 ring-emerald-100",
+  ppt: "bg-orange-50 text-orange-600 ring-orange-100",
+  pptx: "bg-orange-50 text-orange-600 ring-orange-100",
+  png: "bg-violet-50 text-violet-600 ring-violet-100",
+  jpg: "bg-violet-50 text-violet-600 ring-violet-100",
+  jpeg: "bg-violet-50 text-violet-600 ring-violet-100",
+  gif: "bg-violet-50 text-violet-600 ring-violet-100",
+  txt: "bg-slate-100 text-slate-500 ring-slate-200",
+};
+
+function docKind(name) {
+  const ext = (String(name).split(".").pop() || "").toLowerCase();
+  return {
+    tag: ext ? ext.slice(0, 4).toUpperCase() : "FILE",
+    className: DOC_KINDS[ext] || "bg-slate-100 text-slate-500 ring-slate-200",
+  };
+}
+
 function DocumentsCard({ project, onAddDocuments, onRemoveDocument }) {
   const documents = project.documents || [];
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [dragging, setDragging] = useState(false);
 
   const handleFiles = async (fileList) => {
     const files = Array.from(fileList || []);
@@ -940,42 +964,53 @@ function DocumentsCard({ project, onAddDocuments, onRemoveDocument }) {
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   };
 
+  const onDrop = (event) => {
+    event.preventDefault();
+    setDragging(false);
+    handleFiles(event.dataTransfer?.files);
+  };
+
   return (
-    <Card className="border-slate-200/80 p-6">
+    <Card className="border-slate-200/80 p-5">
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Paperclip size={15} className="text-brand-600" /> Documents</p>
-        {documents.length > 0 && <span className="text-xs font-semibold text-slate-500">{documents.length} file{documents.length === 1 ? "" : "s"}</span>}
-      </div>
-
-      <div className="mt-3 space-y-2">
-        {documents.length === 0 ? (
-          <p className="text-sm leading-6 text-slate-500">No documents yet. Upload POA packages, decks, or reference files to keep them with the project.</p>
-        ) : (
-          documents.map((doc) => (
-            <div key={doc.id} className="group flex items-start gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-              <FileText size={16} className="mt-0.5 shrink-0 text-slate-400" />
-              <div className="min-w-0 flex-1">
-                <button
-                  type="button"
-                  onClick={() => openDoc(doc)}
-                  className="block truncate text-left text-sm font-medium text-slate-800 hover:text-brand-600 hover:underline"
-                  title={`Open ${doc.name}`}
-                >
-                  {doc.name}
-                </button>
-                <p className="mt-0.5 text-xs text-slate-500">{formatBytes(doc.size)}{doc.addedAt ? ` · ${new Date(doc.addedAt).toLocaleDateString()}` : ""}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100">
-                <button type="button" onClick={() => openDoc(doc)} className="rounded-lg p-1 text-slate-400 hover:bg-brand-50 hover:text-brand-600" title="Open in new tab"><ExternalLink size={14} /></button>
-                <button type="button" onClick={() => openDoc(doc, true)} className="rounded-lg p-1 text-slate-400 hover:bg-brand-50 hover:text-brand-600" title="Download"><Download size={14} /></button>
-                <button type="button" onClick={() => onRemoveDocument(project.id, doc.id)} className="rounded-lg p-1 text-slate-300 hover:bg-rose-50 hover:text-rose-600" title="Remove"><Trash2 size={14} /></button>
-              </div>
-            </div>
-          ))
+        {documents.length > 0 && (
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">{documents.length} file{documents.length === 1 ? "" : "s"}</span>
         )}
       </div>
 
-      {error && <p className="mt-3 text-xs leading-5 text-rose-600">{error}</p>}
+      <div className="mt-3 space-y-1.5">
+        {documents.length === 0 ? (
+          <p className="text-sm leading-6 text-slate-500">No documents yet. Upload POA packages, decks, or reference files to keep them with the project.</p>
+        ) : (
+          documents.map((doc) => {
+            const kind = docKind(doc.name);
+            return (
+              <div key={doc.id} className="group flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-white px-2.5 py-2 transition hover:border-brand-200 hover:bg-brand-50/30 hover:shadow-sm">
+                <div className={cx("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[9px] font-bold ring-1", kind.className)}>
+                  {kind.tag}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openDoc(doc)}
+                  className="min-w-0 flex-1 text-left"
+                  title={`Open ${doc.name}`}
+                >
+                  <p className="truncate text-sm font-medium text-slate-800 group-hover:text-brand-700">{doc.name}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">{formatBytes(doc.size)}{doc.addedAt ? ` · ${new Date(doc.addedAt).toLocaleDateString()}` : ""}</p>
+                </button>
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <button type="button" onClick={() => openDoc(doc)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-brand-100 hover:text-brand-700" title="Open in new tab"><ExternalLink size={14} /></button>
+                  <button type="button" onClick={() => openDoc(doc, true)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-brand-100 hover:text-brand-700" title="Download"><Download size={14} /></button>
+                  <button type="button" onClick={() => onRemoveDocument(project.id, doc.id)} className="rounded-lg p-1.5 text-slate-300 transition hover:bg-rose-50 hover:text-rose-600" title="Remove"><Trash2 size={14} /></button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {error && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-600">{error}</p>}
 
       <input
         ref={inputRef}
@@ -984,16 +1019,25 @@ function DocumentsCard({ project, onAddDocuments, onRemoveDocument }) {
         className="hidden"
         onChange={(event) => handleFiles(event.target.files)}
       />
-      <Button
+      <button
         type="button"
-        variant="secondary"
-        className="mt-3 w-full justify-center"
         disabled={busy}
         onClick={() => inputRef.current && inputRef.current.click()}
+        onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+        className={cx(
+          "mt-3 flex w-full flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-3 py-4 text-center transition",
+          dragging ? "border-brand-400 bg-brand-50" : "border-slate-200 hover:border-brand-300 hover:bg-brand-50/40",
+          busy && "opacity-60"
+        )}
       >
-        <Upload size={15} /> {busy ? "Uploading…" : "Upload documents"}
-      </Button>
-      <p className="mt-2 text-[11px] leading-4 text-slate-400">Stored in this browser. Up to 25 MB per file.</p>
+        <span className={cx("flex h-9 w-9 items-center justify-center rounded-full", dragging ? "bg-brand-100 text-brand-700" : "bg-slate-100 text-slate-500")}>
+          <Upload size={16} />
+        </span>
+        <span className="text-sm font-semibold text-slate-700">{busy ? "Uploading…" : dragging ? "Drop to upload" : "Upload documents"}</span>
+        <span className="text-[11px] leading-4 text-slate-400">Click or drag files here · stored in this browser · up to 25 MB each</span>
+      </button>
     </Card>
   );
 }
