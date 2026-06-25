@@ -626,6 +626,53 @@ const sampleProjects = [
       { id: "aic-t5", title: "Open the assessment more widely after v2", owner: "Doudou BA", due: "2026-07-15", done: false },
     ],
   },
+  {
+    id: 14,
+    name: "AI POA Vetting",
+    productArea: "Customs",
+    owner: "Doudou BA",
+    dateRequested: "2026-06-24",
+    businessFunction: "Customs Brokerage / Compliance (POA vetting)",
+    stakeholderName: "Mark Zeitlin (LNS), Melissa Fox (LNS), Yujie Su",
+    regionScope: "USA (U.S. Customs brokerage / CBP)",
+    stage: "Problem Articulation",
+    status: "Green",
+    priority: "High",
+    targetDate: "2026-06-26",
+    nextMilestone: "Friday Q&A with Mark Zeitlin to align the vision, scope, and ownership",
+    recommendation: "Prioritize for Scouting",
+    problem: "U.S. Customs Power of Attorney (POA) vetting is manual and document-heavy. Brokers must verify the grantor's identity and authority, check business registration, validate importer information, confirm address legitimacy, and screen restricted-party lists — and ensure the POA was executed directly with the importer of record or drawback claimant, not via a freight forwarder or unauthorized third party.",
+    impact: "Manual POA review is slow, inconsistent, and exposes the broker to compliance risk (reasonable care and national security responsibility), unauthorized representation, and onboarding delays.",
+    financialImpact: "Upside: faster customer onboarding, reduced manual document review, fewer compliance failures, and stronger audit readiness. Quantification to be developed.",
+    objectivePrimary: "Build an AI-driven POA Vetting Assistant — a broker compliance control tower that ingests the POA package, verifies legal entity and signer, checks against CBP expectations, scores risk, routes exceptions, and preserves an audit trail. It pre-clears, risk-scores, documents, and escalates — it does not approve POAs autonomously (human-in-the-loop).",
+    objectiveSecondary: "Answer one core question — can we reasonably demonstrate that this POA was validly executed directly with the importer of record/drawback claimant by an authorized person, and that the importer identity is legitimate? Deliver as a standalone time-saver with a potential path to integrate with Tradelab.",
+    currentChallenges: "Verifying direct execution (importer domain, signer involvement, detecting forwarder-only submissions, auditable e-signature); confirming signer authority against officer/registration records; entity legitimacy and address validation; sanctions/restricted-party screening; and audit defensibility — all done manually today.",
+    previousSolutions: "Manual, document-collection-based POA review by broker operations; no AI-assisted vetting in place.",
+    dreamScenario: "A POA Vetting Assistant embedded into onboarding and broker compliance workflows producing a simple, evidence-backed output — Accept / Conditional Accept / Escalate / Reject — turning POA management from a document-collection exercise into a controlled compliance process, optionally connected to Tradelab.",
+    implementationRisks: "Must not auto-approve without human oversight; access to data sources (ACE importer records, Secretary of State registrations, EIN/W-9, sanctions/restricted-party lists, DUNS/credit); extraction accuracy; regulatory defensibility; and the standalone-vs-Tradelab integration decision.",
+    resourcesRequired: "Doudou (lead), Mark Zeitlin and Melissa Fox (LNS — customs/CBP domain), Yujie Su; access to document intake (CBP Form 5291) and validation data sources; and a decision on the Tradelab integration path.",
+    scalabilityVision: "From a standalone team time-saver to an embedded compliance control tower across customs brokerage onboarding, with tiered operations (AI auto-validation → broker ops → compliance → legal escalation) and possible Tradelab integration.",
+    value: "Compliance risk reduction, faster onboarding, standardized POA validation, better audit readiness, less manual review, and stronger protection against unauthorized broker representation.",
+    blockers: "Scope and ownership to confirm with Mark (Friday Q&A); data-source access; standalone-vs-Tradelab integration decision still open.",
+    notes: "Vision shared by Mark Zeitlin (mark.zeitlin@lns.maersk.com) on 24 Jun 2026 via Yujie Su; cc Melissa Fox (LNS). Mark suggested Doudou take this on — useful standalone and ideally connected to Tradelab — and offered a conversation; a Q&A chat with Mark is to be booked for Friday. Workflow: (1) document intake (CBP Form 5291/equivalent, EIN/W-9, articles of incorporation, signer ID, email/communication trail, ACE importer record, address/phone/website/DUNS); (2) completeness checks (legal name, DBA, importer#/EIN, physical address, signer name/title, broker name, dates, signature, scope); (3) direct-execution check (importer business email domain, signer involvement, forwarder-only detection, auditable e-signature, evidence of direct broker-importer communication); (4) signer authority verification (Secretary of State, officer records, website, LinkedIn, corporate resolution, email domain match); (5) KYC/POA risk score weighted across legal-entity match 20%, signer authority 20%, direct-execution evidence 20%, address/phone/website 15%, sanctions/restricted-party 15%, document quality 10%, mapped to Low/Moderate/High/Critical actions; (6) red-flag escalation; (7) human-in-the-loop broker-ready recommendation; (8) audit trail retention. CBP framing per the email (cbp.gov, ecfr.gov). Source: 'AI POA Vetting' email thread (Jun 2026).",
+    pocHypothesis: "An AI POA Vetting Assistant can extract and validate POA fields, verify direct execution and signer authority, screen restricted parties, and produce an evidence-backed risk score and Accept/Conditional/Escalate/Reject recommendation — cutting manual review time while strengthening CBP reasonable-care compliance, with humans as the final approver.",
+    pocSuccessCriteria: [
+      { id: "poa-c1", text: "POA fields extracted and validated (legal name, EIN/importer#, address, signer, broker, dates, signature, scope)", met: false },
+      { id: "poa-c2", text: "Direct-execution check (importer domain, signer involvement, forwarder-only detection, auditable e-signature)", met: false },
+      { id: "poa-c3", text: "Signer authority verified against officer/registration/website sources", met: false },
+      { id: "poa-c4", text: "KYC/POA risk score generated with tiered actions (Low/Moderate/High/Critical)", met: false },
+      { id: "poa-c5", text: "Sanctions / restricted-party screening integrated", met: false },
+      { id: "poa-c6", text: "Human-in-the-loop output (Accept/Conditional/Escalate/Reject) with evidence and full audit trail", met: false },
+    ],
+    pocOutcome: "Pending",
+    tasks: [
+      { id: "poa-t1", title: "Book Friday Q&A with Mark Zeitlin to align vision, scope, and ownership", owner: "Doudou BA", due: "2026-06-26", done: false },
+      { id: "poa-t2", title: "Document as-is POA vetting process and CBP requirements baseline", owner: "Doudou BA", due: "2026-07-03", done: false },
+      { id: "poa-t3", title: "Identify required data sources (ACE, state registration, EIN/W-9, sanctions/restricted-party, DUNS) and access path", owner: "Doudou BA", due: "2026-07-10", done: false },
+      { id: "poa-t4", title: "Decide standalone vs Tradelab integration approach", owner: "Mark Zeitlin", due: "2026-07-10", done: false },
+      { id: "poa-t5", title: "Define risk-scoring model and human-in-the-loop tiers (Accept/Conditional/Escalate/Reject)", owner: "Doudou BA", due: "2026-07-17", done: false },
+    ],
+  },
 ];
 
 const sampleDecisions = [
@@ -2583,9 +2630,9 @@ export default function App() {
   // One-time, additive migration so people who already have a workspace receive
   // newly added sample initiatives without wiping their data. Bump SEED_VERSION
   // and list the new ids in NEW_SEED_IDS whenever sample projects are added.
-  const SEED_VERSION = 7;
+  const SEED_VERSION = 8;
   const SEED_VERSION_KEY = "iph_seed_version";
-  const NEW_SEED_IDS = [9, 10, 11, 12, 13];
+  const NEW_SEED_IDS = [9, 10, 11, 12, 13, 14];
 
   const mergeNewSeedProjects = async (existing) => {
     if (isRemoteBackend) return existing; // never auto-write to the shared backend
