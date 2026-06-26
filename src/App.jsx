@@ -33,7 +33,7 @@ import {
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip } from "recharts";
 import { repository } from "./data/repository.js";
 import { putDoc, getDoc, deleteDoc } from "./lib/docStore.js";
-import { loadAiConfig, saveAiConfig, resolvedBaseUrl, isAiConfigured, chatComplete, vibeHosts } from "./lib/aiClient.js";
+import { loadAiConfig, saveAiConfig, resolvedBaseUrl, isAiConfigured, chatComplete, createCompletion, vibeHosts } from "./lib/aiClient.js";
 import { isRemoteBackend } from "./config.js";
 import { initAuth, login, logout, getActiveAccount } from "./auth/msalClient.js";
 import {
@@ -2549,12 +2549,12 @@ function DecisionsView({ decisions, onAdd, onEdit, onDelete }) {
 
 function AgentView({ messages, draft, onDraftChange, onSubmit, onRunSuggestion }) {
   const suggestions = [
-    "Summarize portfolio",
-    "At-risk projects",
-    "PoC status",
-    "Open Warehouse Safety",
-    "Add task to Network Optimization: Review benchmark results",
-    "Set Cargo Insurance status to Red",
+    "What's most at risk and why?",
+    "Create a project 'Vendor risk scoring' owned by me, stage Scouting",
+    "Mark Ranger AI as Amber and add a task to chase the NDA by Friday",
+    "Advance Network Optimization AI to the next stage",
+    "Log a decision for AI POA Vetting: confirm Tradelab integration",
+    "Summarize the portfolio",
   ];
 
   return (
@@ -2563,7 +2563,7 @@ function AgentView({ messages, draft, onDraftChange, onSubmit, onRunSuggestion }
         <p className="text-sm font-semibold text-brand-600">Quick chat</p>
         <h3 className="mt-1 text-xl font-semibold text-slate-900">AI workspace</h3>
         <p className="mt-2 text-sm leading-6 text-slate-500">
-          Ask about projects or update them directly from chat.
+          Ask in plain language — it creates, updates, and advances projects, adds tasks, and logs decisions for you.
         </p>
         <div className="mt-5 space-y-3">
           {suggestions.map((suggestion) => (
@@ -2806,6 +2806,20 @@ function FullScreenStatus({ title, detail, action, spinner = false, error = fals
     </div>
   );
 }
+
+// Tools the AI workspace can call to actually act on the portfolio.
+const AGENT_TOOLS = [
+  { type: "function", function: { name: "find_projects", description: "List portfolio projects, optionally filtered. Use this to look up exact project names, owners, statuses, and stages before acting.", parameters: { type: "object", properties: { query: { type: "string", description: "Optional text to match in project name or owner." }, status: { type: "string", enum: statuses }, stage: { type: "string", enum: stages } } } } },
+  { type: "function", function: { name: "create_project", description: "Create a new portfolio project / initiative.", parameters: { type: "object", properties: { name: { type: "string" }, product_area: { type: "string", enum: products }, owner: { type: "string" }, stage: { type: "string", enum: stages }, status: { type: "string", enum: statuses }, priority: { type: "string", enum: priorities }, problem: { type: "string" }, next_milestone: { type: "string" }, target_date: { type: "string", description: "YYYY-MM-DD" }, recommendation: { type: "string", enum: recommendations } }, required: ["name"] } } },
+  { type: "function", function: { name: "update_project", description: "Update fields on an existing project, found by name.", parameters: { type: "object", properties: { project_name: { type: "string" }, status: { type: "string", enum: statuses }, priority: { type: "string", enum: priorities }, owner: { type: "string" }, target_date: { type: "string", description: "YYYY-MM-DD" }, next_milestone: { type: "string" }, stage: { type: "string", enum: stages }, recommendation: { type: "string", enum: recommendations }, problem: { type: "string" }, value: { type: "string" }, blockers: { type: "string" }, notes: { type: "string" } }, required: ["project_name"] } } },
+  { type: "function", function: { name: "advance_project", description: "Advance a project to the next workflow stage. Checks that stage requirements are met first.", parameters: { type: "object", properties: { project_name: { type: "string" } }, required: ["project_name"] } } },
+  { type: "function", function: { name: "add_task", description: "Add a task / checklist item to a project.", parameters: { type: "object", properties: { project_name: { type: "string" }, title: { type: "string" }, due: { type: "string", description: "YYYY-MM-DD" }, owner: { type: "string" } }, required: ["project_name", "title"] } } },
+  { type: "function", function: { name: "add_decision", description: "Log a decision that needs to be made for a project.", parameters: { type: "object", properties: { project_name: { type: "string" }, decision: { type: "string" }, owner: { type: "string" }, due: { type: "string", description: "YYYY-MM-DD" } }, required: ["project_name", "decision"] } } },
+  { type: "function", function: { name: "open_project", description: "Open a project's detail view in the UI for the user.", parameters: { type: "object", properties: { project_name: { type: "string" } }, required: ["project_name"] } } },
+];
+
+const AGENT_SYSTEM_PROMPT =
+  "You are the Innovation Brain assistant for Maersk's Innovation team — a centralized knowledge base and team brain for the project portfolio. You can take real actions with the provided tools: create, update, and advance projects; add tasks; log decisions; and open a project in the UI. When the user asks you to do something, DO it with the tools, then confirm what you did in one or two concise sentences. If you are unsure of an exact project name, call find_projects first. Use ISO dates (YYYY-MM-DD). Only claim a change after the tool reports success; if a tool returns an error, explain it briefly. For pure questions, answer from the portfolio context without calling tools.";
 
 export default function App() {
   const [view, setView] = useState("Portfolio");
@@ -3079,35 +3093,155 @@ export default function App() {
     ].join("\n");
   };
 
-  const answerWithGateway = async (input) => {
+  // Agentic turn: the model plans and calls app tools in a loop until the task
+  // is done. A local working copy keeps multi-step turns (e.g. create then
+  // update the same project) consistent despite async React state.
+  const runAgentTurn = async (input) => {
     const cfg = loadAiConfig();
-    const thinkingId = appendAgentMessageReturnId("assistant", "Thinking…");
+    let liveProjects = projects.map((p) => ({ ...p }));
+    let liveDecisions = decisions.map((d) => ({ ...d }));
+
+    const findP = (name) => findProjectByName(liveProjects, name);
+    const commitProject = (next, isNew) => {
+      liveProjects = isNew ? [next, ...liveProjects] : liveProjects.map((p) => (p.id === next.id ? next : p));
+      setProjects((current) => (isNew ? [next, ...current] : current.map((p) => (p.id === next.id ? next : p))));
+      setSelectedProject((current) => (current && current.id === next.id ? next : current));
+      persistProject(next, isNew);
+    };
+    const commitDecision = (next) => {
+      liveDecisions = [next, ...liveDecisions];
+      setDecisions((current) => [next, ...current]);
+      persistDecision(next, true);
+    };
+
+    const executeTool = async (name, args) => {
+      try {
+        if (name === "find_projects") {
+          let list = liveProjects;
+          if (args.status) list = list.filter((p) => p.status === args.status);
+          if (args.stage) list = list.filter((p) => p.stage === args.stage);
+          if (args.query) {
+            const q = String(args.query).toLowerCase();
+            list = list.filter((p) => `${p.name} ${p.owner || ""}`.toLowerCase().includes(q));
+          }
+          return JSON.stringify(list.slice(0, 40).map((p) => ({ name: p.name, stage: p.stage, status: p.status, priority: p.priority, owner: p.owner, target_date: p.targetDate, next_milestone: p.nextMilestone })));
+        }
+        if (name === "open_project") {
+          const p = findP(args.project_name);
+          if (!p) return `No project matches "${args.project_name}".`;
+          setSelectedProject(liveProjects.find((x) => x.id === p.id) || p);
+          return `Opened ${p.name}.`;
+        }
+        if (name === "create_project") {
+          if (!args.name) return "A name is required.";
+          if (findP(args.name)) return `A project named "${args.name}" already exists.`;
+          const id = liveProjects.reduce((m, p) => Math.max(m, Number(p.id) || 0), 0) + 1;
+          const next = normalizeProject({
+            ...emptyProject, id, name: args.name,
+            productArea: args.product_area || "Other", owner: args.owner || "",
+            stage: args.stage || "Problem Articulation", status: args.status || "Green",
+            priority: args.priority || "Medium", problem: args.problem || "",
+            nextMilestone: args.next_milestone || "", targetDate: args.target_date || "",
+            recommendation: args.recommendation || "Continue Articulation",
+            activity: [createActivityEntry("create", "Project created via AI assistant.")],
+          });
+          commitProject(next, true);
+          return `Created "${next.name}" (stage ${next.stage}, status ${next.status}, priority ${next.priority}).`;
+        }
+        if (name === "update_project") {
+          const found = findP(args.project_name);
+          if (!found) return `No project matches "${args.project_name}".`;
+          const cur = liveProjects.find((x) => x.id === found.id);
+          const patch = {};
+          const changes = [];
+          const enums = { status: statuses, priority: priorities, stage: stages, recommendation: recommendations };
+          for (const key of ["status", "priority", "stage", "recommendation"]) {
+            if (args[key] != null) {
+              if (!enums[key].includes(args[key])) return `${key} must be one of: ${enums[key].join(", ")}.`;
+              patch[key] = args[key];
+              changes.push(`${key} → ${args[key]}`);
+            }
+          }
+          if (args.owner != null) { patch.owner = args.owner; changes.push("owner updated"); }
+          if (args.target_date != null) {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(args.target_date)) return "target_date must be YYYY-MM-DD.";
+            patch.targetDate = args.target_date; changes.push(`target date → ${args.target_date}`);
+          }
+          if (args.next_milestone != null) { patch.nextMilestone = args.next_milestone; changes.push("next milestone updated"); }
+          for (const f of ["problem", "value", "blockers", "notes"]) if (args[f] != null) { patch[f] = args[f]; changes.push(`${f} updated`); }
+          if (!Object.keys(patch).length) return "No recognized fields to update.";
+          const next = { ...cur, ...patch, updatedAt: new Date().toISOString(), activity: [createActivityEntry("agent", `Updated via AI: ${changes.join("; ")}.`), ...(cur.activity || [])].slice(0, 30) };
+          commitProject(next, false);
+          return `Updated ${next.name}: ${changes.join("; ")}.`;
+        }
+        if (name === "advance_project") {
+          const found = findP(args.project_name);
+          if (!found) return `No project matches "${args.project_name}".`;
+          const cur = liveProjects.find((x) => x.id === found.id);
+          const missing = getStageRequirements(cur.stage).filter(([key]) => !hasValue(cur[key])).map(([, label]) => label);
+          if (missing.length) return `Cannot advance ${cur.name} yet — complete first: ${missing.join(", ")}.`;
+          const next = nextStage(cur.stage);
+          if (!next) return `${cur.name} is already at the final stage.`;
+          const updated = { ...cur, stage: next, updatedAt: new Date().toISOString(), activity: [createActivityEntry("stage", `Advanced from ${cur.stage} to ${next} via AI assistant.`), ...(cur.activity || [])].slice(0, 30) };
+          commitProject(updated, false);
+          return `Advanced ${cur.name} to ${next}.`;
+        }
+        if (name === "add_task") {
+          const found = findP(args.project_name);
+          if (!found) return `No project matches "${args.project_name}".`;
+          if (!args.title) return "A task title is required.";
+          const cur = liveProjects.find((x) => x.id === found.id);
+          const task = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, title: args.title, due: args.due || "", owner: args.owner || "", done: false };
+          const updated = { ...cur, tasks: [...(cur.tasks || []), task], updatedAt: new Date().toISOString(), activity: [createActivityEntry("agent", `Task added via AI: ${task.title}`), ...(cur.activity || [])].slice(0, 30) };
+          commitProject(updated, false);
+          return `Added task to ${cur.name}: "${task.title}"${task.due ? ` (due ${task.due})` : ""}.`;
+        }
+        if (name === "add_decision") {
+          const found = findP(args.project_name);
+          if (!found) return `No project matches "${args.project_name}".`;
+          if (!args.decision) return "A decision description is required.";
+          const id = liveDecisions.reduce((m, d) => Math.max(m, Number(d.id) || 0), 0) + 1;
+          const next = normalizeDecision({ ...emptyDecision, id, project: found.name, decision: args.decision, owner: args.owner || "", due: args.due || "", status: "Open" });
+          commitDecision(next);
+          return `Logged decision for ${found.name}: "${args.decision}".`;
+        }
+        return `Unknown tool: ${name}.`;
+      } catch (error) {
+        return `Error running ${name}: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    };
+
+    const thinkingId = appendAgentMessageReturnId("assistant", "Working…");
+    const history = agentMessages
+      .filter((m) => m.id !== "agent-welcome")
+      .slice(-8)
+      .map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
+    const convo = [
+      { role: "system", content: `${AGENT_SYSTEM_PROMPT}\n\n${buildPortfolioContext()}` },
+      ...history,
+      { role: "user", content: input },
+    ];
+
     try {
-      const history = agentMessages
-        .filter((m) => m.id !== "agent-welcome")
-        .slice(-8)
-        .map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
-      const reply = await chatComplete({
-        apiKey: cfg.apiKey,
-        model: cfg.model,
-        baseUrl: resolvedBaseUrl(cfg),
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are the Innovation Brain assistant for Maersk's Innovation team — a centralized knowledge base and team brain for the project portfolio. Answer concisely and specifically using the portfolio context below. To change data, tell the user the in-chat command (e.g. \"Set <project> status to Red\") or to edit it in the UI; do not claim to have changed anything yourself.\n\n" +
-              buildPortfolioContext(),
-          },
-          ...history,
-          { role: "user", content: input },
-        ],
-      });
-      updateAgentMessage(thinkingId, reply);
+      for (let step = 0; step < 6; step += 1) {
+        const message = await createCompletion({ apiKey: cfg.apiKey, model: cfg.model, baseUrl: resolvedBaseUrl(cfg), messages: convo, tools: AGENT_TOOLS });
+        const toolCalls = message.tool_calls || [];
+        convo.push({ role: "assistant", content: message.content || "", tool_calls: toolCalls.length ? toolCalls : undefined });
+        if (!toolCalls.length) {
+          updateAgentMessage(thinkingId, message.content || "(no response)");
+          return;
+        }
+        updateAgentMessage(thinkingId, `Working… (${toolCalls.map((c) => c.function?.name).filter(Boolean).join(", ")})`);
+        for (const call of toolCalls) {
+          let parsed = {};
+          try { parsed = JSON.parse(call.function?.arguments || "{}"); } catch { parsed = {}; }
+          const result = await executeTool(call.function?.name, parsed);
+          convo.push({ role: "tool", tool_call_id: call.id, content: result });
+        }
+      }
+      updateAgentMessage(thinkingId, "I stopped after several steps. Could you narrow the request a little?");
     } catch (error) {
-      updateAgentMessage(
-        thinkingId,
-        `AI request failed.\n\n${error instanceof Error ? error.message : String(error)}\n\nCheck the key, model, and environment in Settings → AI assistant.`
-      );
+      updateAgentMessage(thinkingId, `AI request failed.\n\n${error instanceof Error ? error.message : String(error)}\n\nCheck the key, model, and environment in Settings → AI assistant.`);
     }
   };
 
@@ -3362,6 +3496,11 @@ export default function App() {
 
     appendAgentMessage("user", input);
 
+    if (isAiConfigured(loadAiConfig())) {
+      await runAgentTurn(input);
+      return;
+    }
+
     const normalized = input.toLowerCase();
     const overdueProjects = projects.filter((project) => {
       const days = daysUntil(project.targetDate);
@@ -3537,14 +3676,9 @@ export default function App() {
       return;
     }
 
-    if (isAiConfigured(loadAiConfig())) {
-      await answerWithGateway(input);
-      return;
-    }
-
     appendAgentMessage(
       "assistant",
-      "I can summarize the portfolio, show at-risk work or active PoCs, open a project, advance a project, add tasks (\"Add task to <project>: <task>\"), or update fields like status, priority, owner, target date, recommendation, and next milestone.\n\nTip: add a Vibe Gateway API key in Settings → AI assistant to unlock open-ended AI answers grounded in your portfolio."
+      "I can summarize the portfolio, show at-risk work or active PoCs, open a project, advance a project, add tasks (\"Add task to <project>: <task>\"), or update fields like status, priority, owner, target date, recommendation, and next milestone.\n\nTip: add a Vibe Gateway API key in Settings → AI assistant to turn this into a full agent that creates and updates projects from plain language."
     );
   };
 

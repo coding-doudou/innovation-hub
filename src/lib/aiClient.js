@@ -44,8 +44,14 @@ export function isAiConfigured(cfg) {
   return Boolean((cfg.apiKey || "").trim() && (cfg.model || "").trim());
 }
 
-export async function chatComplete({ apiKey, model, baseUrl, messages, temperature = 0.2, signal }) {
+// Low-level call. Returns the full assistant message ({ role, content, tool_calls }).
+export async function createCompletion({ apiKey, model, baseUrl, messages, tools, temperature = 0.2, signal }) {
   const url = `${baseUrl}/chat/completions`;
+  const body = { model, messages, temperature };
+  if (tools && tools.length) {
+    body.tools = tools;
+    body.tool_choice = "auto";
+  }
   let res;
   try {
     res = await fetch(url, {
@@ -54,7 +60,7 @@ export async function chatComplete({ apiKey, model, baseUrl, messages, temperatu
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({ model, messages, temperature }),
+      body: JSON.stringify(body),
       signal,
     });
   } catch (err) {
@@ -65,15 +71,23 @@ export async function chatComplete({ apiKey, model, baseUrl, messages, temperatu
   if (!res.ok) {
     let detail = "";
     try {
-      const body = await res.json();
-      detail = body?.error?.message || JSON.stringify(body);
+      const errBody = await res.json();
+      detail = errBody?.error?.message || JSON.stringify(errBody);
     } catch {
       detail = await res.text().catch(() => "");
     }
     throw new Error(`Gateway returned ${res.status}. ${String(detail).slice(0, 400)}`);
   }
   const data = await res.json();
-  const text = data?.choices?.[0]?.message?.content;
+  const message = data?.choices?.[0]?.message;
+  if (!message) throw new Error("Gateway returned no message.");
+  return message;
+}
+
+// Convenience wrapper that returns just the text (used by the Settings test).
+export async function chatComplete(opts) {
+  const message = await createCompletion(opts);
+  const text = message?.content;
   if (!text) throw new Error("Gateway returned no message content.");
   return String(text).trim();
 }
