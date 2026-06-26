@@ -24,7 +24,9 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Send,
   Settings,
+  Sparkles,
   Target,
   Trash2,
   Upload,
@@ -2547,79 +2549,187 @@ function DecisionsView({ decisions, onAdd, onEdit, onDelete }) {
   );
 }
 
-function AgentView({ messages, draft, onDraftChange, onSubmit, onRunSuggestion }) {
+function renderRichText(text) {
+  return String(text).split("\n").map((line, lineIndex, lines) => {
+    const parts = line.split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map((segment, segIndex) =>
+      segment.startsWith("**") && segment.endsWith("**")
+        ? <strong key={segIndex} className="font-semibold">{segment.slice(2, -2)}</strong>
+        : <span key={segIndex}>{segment}</span>
+    );
+    return (
+      <span key={lineIndex}>
+        {parts}
+        {lineIndex < lines.length - 1 && <br />}
+      </span>
+    );
+  });
+}
+
+function AgentActionRow({ message }) {
+  const tone = message.tone || "neutral";
+  const Icon = tone === "ok" ? CheckCircle2 : tone === "error" ? AlertTriangle : Search;
+  const color = tone === "ok" ? "text-emerald-600" : tone === "error" ? "text-rose-600" : "text-slate-400";
+  return (
+    <div className="flex items-start gap-2.5 pl-11 pr-2">
+      <Icon size={15} className={cx("mt-0.5 shrink-0", color)} />
+      <p className="text-[13px] leading-5 text-slate-500">
+        <span className="font-medium text-slate-700">{message.label}</span>
+        {message.text ? <span> · {message.text}</span> : null}
+      </p>
+    </div>
+  );
+}
+
+function AgentView({ messages, draft, busy, aiEnabled, onDraftChange, onSubmit, onRunSuggestion, onOpenSettings }) {
   const suggestions = [
     "What's most at risk and why?",
-    "Create a project 'Vendor risk scoring' owned by me, stage Scouting",
+    "Create a project 'Vendor risk scoring', owner me, stage Scouting",
     "Mark Ranger AI as Amber and add a task to chase the NDA by Friday",
     "Advance Network Optimization AI to the next stage",
-    "Log a decision for AI POA Vetting: confirm Tradelab integration",
+    "Paste an email and turn it into a project",
     "Summarize the portfolio",
   ];
 
-  return (
-    <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-      <Card className="p-6">
-        <p className="text-sm font-semibold text-brand-600">Quick chat</p>
-        <h3 className="mt-1 text-xl font-semibold text-slate-900">AI workspace</h3>
-        <p className="mt-2 text-sm leading-6 text-slate-500">
-          Ask in plain language — it creates, updates, and advances projects, adds tasks, and logs decisions for you.
-        </p>
-        <div className="mt-5 space-y-3">
-          {suggestions.map((suggestion) => (
-            <button
-              key={suggestion}
-              type="button"
-              onClick={() => onRunSuggestion(suggestion)}
-              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:border-brand-200 hover:bg-brand-50/60"
-            >
-              {suggestion}
-            </button>
-          ))}
-        </div>
-        <div className="mt-6 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-          <p className="font-semibold text-slate-800">Try asking</p>
-          <ul className="mt-3 space-y-2">
-            <li>Open a project</li>
-            <li>Change status or owner</li>
-            <li>Update target date or milestone</li>
-            <li>Advance a project</li>
-          </ul>
-        </div>
-      </Card>
+  const scrollRef = useRef(null);
+  const formRef = useRef(null);
+  const taRef = useRef(null);
+  const convo = messages.filter((m) => m.id !== "agent-welcome");
+  const isEmpty = convo.length === 0;
 
-      <Card className="flex min-h-[700px] flex-col overflow-hidden">
-        <div className="border-b border-slate-200 px-6 py-5">
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const empty = messages.filter((m) => m.id !== "agent-welcome").length === 0;
+    el.scrollTop = empty ? 0 : el.scrollHeight;
+  }, [messages, busy]);
+
+  const grow = (el) => {
+    if (!el) return;
+    el.style.height = "auto";
+    if (el.value) el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  };
+
+  useEffect(() => {
+    if (!draft && taRef.current) taRef.current.style.height = "auto";
+  }, [draft]);
+
+  const handleKeyDown = (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      if (draft.trim() && !busy) formRef.current?.requestSubmit();
+    }
+  };
+
+  return (
+    <Card className="flex h-[calc(100vh-150px)] min-h-[560px] flex-col overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-6 py-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-gradient text-white shadow-brand-sm">
+            <Bot size={20} />
+          </div>
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">Innovation Brain assistant</h3>
+            <p className="text-xs text-slate-500">Ask in plain language — it acts on your portfolio.</p>
+          </div>
+        </div>
+        {aiEnabled ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Connected
+          </span>
+        ) : (
+          <button type="button" onClick={onOpenSettings} className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100">
+            <AlertTriangle size={13} /> Set up AI
+          </button>
+        )}
+      </div>
+
+      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto bg-[#fbfcfe] px-4 py-6 sm:px-6">
+        {isEmpty ? (
+          <div className="mx-auto flex max-w-2xl flex-col items-center justify-center px-2 py-6 text-center sm:min-h-full">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-gradient text-white shadow-brand-sm">
+              <Sparkles size={26} />
+            </div>
+            <h2 className="mt-4 text-xl font-semibold text-slate-900">What should we work on?</h2>
+            <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
+              I can create and update projects, fill them in from an email or brief, add tasks, log decisions, and answer questions across the portfolio.
+            </p>
+            {!aiEnabled && (
+              <button type="button" onClick={onOpenSettings} className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100">
+                <AlertTriangle size={15} /> Add a Vibe Gateway key in Settings to enable actions
+              </button>
+            )}
+            <div className="mt-6 grid w-full gap-2 sm:grid-cols-2">
+              {suggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => onRunSuggestion(suggestion)}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:border-brand-300 hover:bg-brand-50/60 hover:shadow-sm"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          convo.map((message) => {
+            if (message.role === "action") return <AgentActionRow key={message.id} message={message} />;
+            if (message.role === "user") {
+              return (
+                <div key={message.id} className="ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-brand-600 px-4 py-2.5 text-white shadow-brand-sm">
+                  <p className="whitespace-pre-wrap text-sm leading-6">{message.text}</p>
+                </div>
+              );
+            }
+            return (
+              <div key={message.id} className="flex max-w-[85%] gap-3">
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                  <Bot size={15} />
+                </div>
+                <div className="rounded-2xl rounded-tl-md border border-slate-200 bg-white px-4 py-2.5 text-slate-800">
+                  <p className="whitespace-pre-wrap text-sm leading-6">{renderRichText(message.text)}</p>
+                </div>
+              </div>
+            );
+          })
+        )}
+        {busy && (
           <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-brand-50 p-3 text-brand-600">
-              <Bot size={20} />
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+              <Bot size={15} />
             </div>
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">Quick chat</h3>
-              <p className="text-sm text-slate-500">Live access to projects and decisions.</p>
+            <div className="flex items-center gap-1 rounded-2xl rounded-tl-md border border-slate-200 bg-white px-4 py-3">
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
             </div>
           </div>
+        )}
+      </div>
+
+      <form ref={formRef} onSubmit={onSubmit} className="border-t border-slate-200 bg-white px-4 py-3 sm:px-6">
+        <div className="flex items-end gap-2 rounded-2xl border border-slate-200 bg-white p-2 transition focus-within:border-brand-300 focus-within:ring-2 focus-within:ring-brand-100">
+          <textarea
+            ref={taRef}
+            value={draft}
+            rows={1}
+            onChange={(event) => { onDraftChange(event.target.value); grow(event.target); }}
+            onKeyDown={handleKeyDown}
+            className="max-h-[180px] min-h-[40px] flex-1 resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0"
+            placeholder="Ask, or paste an email / brief and I'll turn it into a project…"
+          />
+          <button
+            type="submit"
+            disabled={busy || !draft.trim()}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+            aria-label="Send"
+          >
+            <Send size={17} />
+          </button>
         </div>
-        <div className="flex-1 space-y-4 overflow-y-auto bg-[#fbfcfe] px-6 py-6">
-          {messages.map((message) => (
-            <div key={message.id} className={cx("max-w-[80%] rounded-3xl px-4 py-3", message.role === "user" ? "ml-auto bg-brand-600 text-white" : "bg-white text-slate-800 border border-slate-200")}>
-              <p className="whitespace-pre-wrap text-sm leading-6">{message.text}</p>
-            </div>
-          ))}
-        </div>
-        <form onSubmit={onSubmit} className="border-t border-slate-200 bg-white p-4">
-          <div className="flex items-end gap-3">
-            <Textarea
-              value={draft}
-              onChange={(event) => onDraftChange(event.target.value)}
-              className="min-h-[88px]"
-              placeholder="Ask or update. Example: Set Warehouse Safety status to Green."
-            />
-            <Button type="submit" className="px-5">Run</Button>
-          </div>
-        </form>
-      </Card>
-    </div>
+        <p className="mt-2 px-1 text-[11px] text-slate-400">Enter to send · Shift+Enter for a new line{aiEnabled ? "" : " · add a key in Settings to enable actions"}</p>
+      </form>
+    </Card>
   );
 }
 
@@ -2807,11 +2917,93 @@ function FullScreenStatus({ title, detail, action, spinner = false, error = fals
   );
 }
 
+// Free-text project fields the agent can fill, mapped from snake_case args.
+const TEXT_FIELD_MAP = {
+  owner: "owner",
+  stakeholder_name: "stakeholderName",
+  business_function: "businessFunction",
+  region_scope: "regionScope",
+  date_requested: "dateRequested",
+  next_milestone: "nextMilestone",
+  problem: "problem",
+  impact: "impact",
+  financial_impact: "financialImpact",
+  objective_primary: "objectivePrimary",
+  objective_secondary: "objectiveSecondary",
+  current_challenges: "currentChallenges",
+  previous_solutions: "previousSolutions",
+  dream_scenario: "dreamScenario",
+  implementation_risks: "implementationRisks",
+  resources_required: "resourcesRequired",
+  scalability_vision: "scalabilityVision",
+  selected_vendor: "selectedVendor",
+  poc_hypothesis: "pocHypothesis",
+  value: "value",
+  blockers: "blockers",
+  notes: "notes",
+};
+
+// Shared schema for the rich, fillable project fields (used by create + update).
+const PROJECT_FIELD_PROPS = {
+  product_area: { type: "string", enum: products },
+  stage: { type: "string", enum: stages },
+  status: { type: "string", enum: statuses },
+  priority: { type: "string", enum: priorities },
+  recommendation: { type: "string", enum: recommendations },
+  target_date: { type: "string", description: "YYYY-MM-DD" },
+  date_requested: { type: "string", description: "YYYY-MM-DD" },
+  owner: { type: "string" },
+  stakeholder_name: { type: "string", description: "People/teams involved." },
+  business_function: { type: "string" },
+  region_scope: { type: "string" },
+  next_milestone: { type: "string" },
+  problem: { type: "string" },
+  impact: { type: "string" },
+  financial_impact: { type: "string" },
+  objective_primary: { type: "string" },
+  objective_secondary: { type: "string" },
+  current_challenges: { type: "string" },
+  previous_solutions: { type: "string" },
+  dream_scenario: { type: "string" },
+  implementation_risks: { type: "string" },
+  resources_required: { type: "string" },
+  scalability_vision: { type: "string" },
+  selected_vendor: { type: "string", description: "Vendor/partner name." },
+  poc_hypothesis: { type: "string" },
+  value: { type: "string" },
+  blockers: { type: "string" },
+  notes: { type: "string", description: "Context, source, links, contacts." },
+};
+
+// Map the agent's snake_case text args onto camelCase project fields.
+function applyProjectFields(args) {
+  const out = {};
+  for (const [argKey, field] of Object.entries(TEXT_FIELD_MAP)) {
+    if (args[argKey] != null && args[argKey] !== "") out[field] = args[argKey];
+  }
+  return out;
+}
+
+function validateProjectEnums(args) {
+  const checks = { product_area: products, stage: stages, status: statuses, priority: priorities, recommendation: recommendations };
+  for (const [key, allowed] of Object.entries(checks)) {
+    if (args[key] != null && !allowed.includes(args[key])) return `${key} must be one of: ${allowed.join(", ")}.`;
+  }
+  return null;
+}
+
+function validateProjectDates(args) {
+  for (const key of ["target_date", "date_requested"]) {
+    if (args[key] != null && args[key] !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(args[key])) return `${key} must be in YYYY-MM-DD format.`;
+  }
+  return null;
+}
+
 // Tools the AI workspace can call to actually act on the portfolio.
 const AGENT_TOOLS = [
   { type: "function", function: { name: "find_projects", description: "List portfolio projects, optionally filtered. Use this to look up exact project names, owners, statuses, and stages before acting.", parameters: { type: "object", properties: { query: { type: "string", description: "Optional text to match in project name or owner." }, status: { type: "string", enum: statuses }, stage: { type: "string", enum: stages } } } } },
-  { type: "function", function: { name: "create_project", description: "Create a new portfolio project / initiative.", parameters: { type: "object", properties: { name: { type: "string" }, product_area: { type: "string", enum: products }, owner: { type: "string" }, stage: { type: "string", enum: stages }, status: { type: "string", enum: statuses }, priority: { type: "string", enum: priorities }, problem: { type: "string" }, next_milestone: { type: "string" }, target_date: { type: "string", description: "YYYY-MM-DD" }, recommendation: { type: "string", enum: recommendations } }, required: ["name"] } } },
-  { type: "function", function: { name: "update_project", description: "Update fields on an existing project, found by name.", parameters: { type: "object", properties: { project_name: { type: "string" }, status: { type: "string", enum: statuses }, priority: { type: "string", enum: priorities }, owner: { type: "string" }, target_date: { type: "string", description: "YYYY-MM-DD" }, next_milestone: { type: "string" }, stage: { type: "string", enum: stages }, recommendation: { type: "string", enum: recommendations }, problem: { type: "string" }, value: { type: "string" }, blockers: { type: "string" }, notes: { type: "string" } }, required: ["project_name"] } } },
+  { type: "function", function: { name: "create_project", description: "Create a new portfolio project / initiative. When the user shares raw info (an email, brief, or notes), extract and fill as many fields as you reasonably can — owner, stakeholders, problem, impact, objectives, next milestone, dates, vendor, etc.", parameters: { type: "object", properties: { name: { type: "string" }, ...PROJECT_FIELD_PROPS }, required: ["name"] } } },
+  { type: "function", function: { name: "update_project", description: "Update or fill fields on an existing project, found by name. Use this to enrich a project with details the user shares.", parameters: { type: "object", properties: { project_name: { type: "string" }, ...PROJECT_FIELD_PROPS }, required: ["project_name"] } } },
   { type: "function", function: { name: "advance_project", description: "Advance a project to the next workflow stage. Checks that stage requirements are met first.", parameters: { type: "object", properties: { project_name: { type: "string" } }, required: ["project_name"] } } },
   { type: "function", function: { name: "add_task", description: "Add a task / checklist item to a project.", parameters: { type: "object", properties: { project_name: { type: "string" }, title: { type: "string" }, due: { type: "string", description: "YYYY-MM-DD" }, owner: { type: "string" } }, required: ["project_name", "title"] } } },
   { type: "function", function: { name: "add_decision", description: "Log a decision that needs to be made for a project.", parameters: { type: "object", properties: { project_name: { type: "string" }, decision: { type: "string" }, owner: { type: "string" }, due: { type: "string", description: "YYYY-MM-DD" } }, required: ["project_name", "decision"] } } },
@@ -2819,7 +3011,7 @@ const AGENT_TOOLS = [
 ];
 
 const AGENT_SYSTEM_PROMPT =
-  "You are the Innovation Brain assistant for Maersk's Innovation team — a centralized knowledge base and team brain for the project portfolio. You can take real actions with the provided tools: create, update, and advance projects; add tasks; log decisions; and open a project in the UI. When the user asks you to do something, DO it with the tools, then confirm what you did in one or two concise sentences. If you are unsure of an exact project name, call find_projects first. Use ISO dates (YYYY-MM-DD). Only claim a change after the tool reports success; if a tool returns an error, explain it briefly. For pure questions, answer from the portfolio context without calling tools.";
+  "You are the Innovation Brain assistant for Maersk's Innovation team — a centralized knowledge base and team brain for the project portfolio. You can take real actions with the provided tools: create, update, and advance projects; add tasks; log decisions; and open a project in the UI. When the user asks you to do something, DO it with the tools, then confirm what you did in one or two concise sentences. When the user pastes raw material (an email thread, brief, or notes), turn it into a well-structured project: infer a clear name, owner, stakeholders, problem, impact, objectives, next milestone, dates, and vendor, and fill those fields via create_project or update_project — don't just summarize. If you are unsure of an exact project name, call find_projects first. Use ISO dates (YYYY-MM-DD). Only claim a change after the tool reports success; if a tool returns an error, explain it briefly. For pure questions, answer from the portfolio context without calling tools.";
 
 export default function App() {
   const [view, setView] = useState("Portfolio");
@@ -2832,6 +3024,7 @@ export default function App() {
   const [showDecisionForm, setShowDecisionForm] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState(null);
   const [agentDraft, setAgentDraft] = useState("");
+  const [agentBusy, setAgentBusy] = useState(false);
   const [agentMessages, setAgentMessages] = useState([
     {
       id: "agent-welcome",
@@ -3067,14 +3260,8 @@ export default function App() {
     setAgentMessages((current) => [...current, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, role, text }]);
   };
 
-  const appendAgentMessageReturnId = (role, text) => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    setAgentMessages((current) => [...current, { id, role, text }]);
-    return id;
-  };
-
-  const updateAgentMessage = (id, text) => {
-    setAgentMessages((current) => current.map((message) => (message.id === id ? { ...message, text } : message)));
+  const appendAgentAction = (label, detail, tone) => {
+    setAgentMessages((current) => [...current, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, role: "action", label, text: detail, tone }]);
   };
 
   const buildPortfolioContext = () => {
@@ -3135,44 +3322,43 @@ export default function App() {
         if (name === "create_project") {
           if (!args.name) return "A name is required.";
           if (findP(args.name)) return `A project named "${args.name}" already exists.`;
+          const enumErr = validateProjectEnums(args);
+          if (enumErr) return enumErr;
+          const dateErr = validateProjectDates(args);
+          if (dateErr) return dateErr;
           const id = liveProjects.reduce((m, p) => Math.max(m, Number(p.id) || 0), 0) + 1;
           const next = normalizeProject({
             ...emptyProject, id, name: args.name,
-            productArea: args.product_area || "Other", owner: args.owner || "",
+            productArea: args.product_area || "Other",
             stage: args.stage || "Problem Articulation", status: args.status || "Green",
-            priority: args.priority || "Medium", problem: args.problem || "",
-            nextMilestone: args.next_milestone || "", targetDate: args.target_date || "",
+            priority: args.priority || "Medium",
             recommendation: args.recommendation || "Continue Articulation",
+            targetDate: args.target_date || "",
+            ...applyProjectFields(args),
             activity: [createActivityEntry("create", "Project created via AI assistant.")],
           });
           commitProject(next, true);
-          return `Created "${next.name}" (stage ${next.stage}, status ${next.status}, priority ${next.priority}).`;
+          const filled = Object.keys(applyProjectFields(args)).length;
+          return `Created "${next.name}" (stage ${next.stage}, status ${next.status}, priority ${next.priority})${filled ? ` with ${filled} fields filled` : ""}.`;
         }
         if (name === "update_project") {
           const found = findP(args.project_name);
           if (!found) return `No project matches "${args.project_name}".`;
+          const enumErr = validateProjectEnums(args);
+          if (enumErr) return enumErr;
+          const dateErr = validateProjectDates(args);
+          if (dateErr) return dateErr;
           const cur = liveProjects.find((x) => x.id === found.id);
-          const patch = {};
-          const changes = [];
-          const enums = { status: statuses, priority: priorities, stage: stages, recommendation: recommendations };
+          const patch = { ...applyProjectFields(args) };
+          const changes = Object.keys(patch);
           for (const key of ["status", "priority", "stage", "recommendation"]) {
-            if (args[key] != null) {
-              if (!enums[key].includes(args[key])) return `${key} must be one of: ${enums[key].join(", ")}.`;
-              patch[key] = args[key];
-              changes.push(`${key} → ${args[key]}`);
-            }
+            if (args[key] != null) { patch[key] = args[key]; changes.push(key); }
           }
-          if (args.owner != null) { patch.owner = args.owner; changes.push("owner updated"); }
-          if (args.target_date != null) {
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(args.target_date)) return "target_date must be YYYY-MM-DD.";
-            patch.targetDate = args.target_date; changes.push(`target date → ${args.target_date}`);
-          }
-          if (args.next_milestone != null) { patch.nextMilestone = args.next_milestone; changes.push("next milestone updated"); }
-          for (const f of ["problem", "value", "blockers", "notes"]) if (args[f] != null) { patch[f] = args[f]; changes.push(`${f} updated`); }
-          if (!Object.keys(patch).length) return "No recognized fields to update.";
-          const next = { ...cur, ...patch, updatedAt: new Date().toISOString(), activity: [createActivityEntry("agent", `Updated via AI: ${changes.join("; ")}.`), ...(cur.activity || [])].slice(0, 30) };
+          if (args.target_date != null) { patch.targetDate = args.target_date; changes.push("targetDate"); }
+          if (!changes.length) return "No recognized fields to update.";
+          const next = { ...cur, ...patch, updatedAt: new Date().toISOString(), activity: [createActivityEntry("agent", `Updated via AI: ${changes.join(", ")}.`), ...(cur.activity || [])].slice(0, 30) };
           commitProject(next, false);
-          return `Updated ${next.name}: ${changes.join("; ")}.`;
+          return `Updated ${next.name} — ${changes.length} field${changes.length === 1 ? "" : "s"}: ${changes.join(", ")}.`;
         }
         if (name === "advance_project") {
           const found = findP(args.project_name);
@@ -3211,7 +3397,6 @@ export default function App() {
       }
     };
 
-    const thinkingId = appendAgentMessageReturnId("assistant", "Working…");
     const history = agentMessages
       .filter((m) => m.id !== "agent-welcome")
       .slice(-8)
@@ -3222,26 +3407,34 @@ export default function App() {
       { role: "user", content: input },
     ];
 
+    const isToolError = (text) => /(is required\.| already exists\.|must be one of|must be in YYYY|No recognized fields|^No project matches|^Cannot advance|already at the final stage|^Unknown tool|^Error running)/.test(text);
+    const actionLabel = (toolName) => ({ create_project: "Created project", update_project: "Updated project", advance_project: "Advanced stage", add_task: "Added task", add_decision: "Logged decision", open_project: "Opened project", find_projects: "Looked up projects" }[toolName] || toolName);
+
+    setAgentBusy(true);
     try {
       for (let step = 0; step < 6; step += 1) {
         const message = await createCompletion({ apiKey: cfg.apiKey, model: cfg.model, baseUrl: resolvedBaseUrl(cfg), messages: convo, tools: AGENT_TOOLS });
         const toolCalls = message.tool_calls || [];
         convo.push({ role: "assistant", content: message.content || "", tool_calls: toolCalls.length ? toolCalls : undefined });
         if (!toolCalls.length) {
-          updateAgentMessage(thinkingId, message.content || "(no response)");
+          appendAgentMessage("assistant", message.content || "Done.");
           return;
         }
-        updateAgentMessage(thinkingId, `Working… (${toolCalls.map((c) => c.function?.name).filter(Boolean).join(", ")})`);
         for (const call of toolCalls) {
           let parsed = {};
           try { parsed = JSON.parse(call.function?.arguments || "{}"); } catch { parsed = {}; }
-          const result = await executeTool(call.function?.name, parsed);
+          const toolName = call.function?.name;
+          const result = await executeTool(toolName, parsed);
+          const isRead = toolName === "find_projects";
+          appendAgentAction(actionLabel(toolName), isRead ? "" : result, isRead ? "neutral" : isToolError(result) ? "error" : "ok");
           convo.push({ role: "tool", tool_call_id: call.id, content: result });
         }
       }
-      updateAgentMessage(thinkingId, "I stopped after several steps. Could you narrow the request a little?");
+      appendAgentMessage("assistant", "I stopped after several steps. Could you narrow the request a little?");
     } catch (error) {
-      updateAgentMessage(thinkingId, `AI request failed.\n\n${error instanceof Error ? error.message : String(error)}\n\nCheck the key, model, and environment in Settings → AI assistant.`);
+      appendAgentMessage("assistant", `⚠️ AI request failed.\n\n${error instanceof Error ? error.message : String(error)}\n\nCheck the key, model, and environment in Settings → AI assistant.`);
+    } finally {
+      setAgentBusy(false);
     }
   };
 
@@ -3879,9 +4072,12 @@ export default function App() {
           <AgentView
             messages={agentMessages}
             draft={agentDraft}
+            busy={agentBusy}
+            aiEnabled={isAiConfigured(loadAiConfig())}
             onDraftChange={setAgentDraft}
             onSubmit={submitAgentPrompt}
             onRunSuggestion={runAgent}
+            onOpenSettings={() => setView("Settings")}
           />
         )}
 
