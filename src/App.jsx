@@ -2780,7 +2780,7 @@ function AiSettingsCard() {
           <Input type="password" value={cfg.apiKey} onChange={(e) => set("apiKey", e.target.value)} placeholder="sk-… (from vibecli)" />
         </Field>
         <Field label="Base URL override (optional)" wide>
-          <Input value={cfg.baseUrl} onChange={(e) => set("baseUrl", e.target.value)} placeholder={`${vibeHosts[cfg.env] || vibeHosts.nonprod}/v1`} />
+          <Input value={cfg.baseUrl} onChange={(e) => set("baseUrl", e.target.value)} placeholder={`${vibeHosts[cfg.env] || vibeHosts.nonprod} (use the 'url' from your Vault secret)`} />
         </Field>
       </div>
       <p className="mt-2 text-xs text-slate-400">Resolved endpoint: {resolvedBaseUrl(cfg)}/chat/completions</p>

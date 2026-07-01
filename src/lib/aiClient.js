@@ -33,10 +33,11 @@ export function saveAiConfig(cfg) {
   return next;
 }
 
-// Resolve the OpenAI base URL: explicit override, else the env host + /v1.
+// Resolve the base URL: explicit override, else the env host. The gateway
+// serves /chat/completions at the host root (matches the Vault secret's `url`).
 export function resolvedBaseUrl(cfg) {
   const explicit = (cfg.baseUrl || "").trim();
-  const base = explicit || `${vibeHosts[cfg.env] || vibeHosts.nonprod}/v1`;
+  const base = explicit || `${vibeHosts[cfg.env] || vibeHosts.nonprod}`;
   return base.replace(/\/+$/, "");
 }
 
