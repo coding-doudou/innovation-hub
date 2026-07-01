@@ -1,0 +1,9 @@
+{
+  "name": "innovation-brain-api",
+  "version": "1.0.0",
+  "description": "Server-side AI proxy for the Innovation Brain app (Vibe Gateway).",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  }
+}

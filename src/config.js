@@ -22,6 +22,14 @@ export const sharePoint = {
   decisionsList: trim(env.VITE_SP_DECISIONS_LIST) || "Decisions",
 };
 
+// AI (MIDAS Vibe Gateway). In a deployed build, set VITE_AI_PROXY_URL to a
+// server-side proxy (e.g. "/api/chat") that holds the gateway key — the browser
+// then never sees a secret. Left blank, the app falls back to a per-browser key
+// entered in Settings (fine for local dev only). VITE_AI_MODEL is an optional
+// default model so users don't each have to type it.
+export const aiProxyUrl = trim(env.VITE_AI_PROXY_URL);
+export const aiDefaultModel = trim(env.VITE_AI_MODEL);
+
 // Graph delegated scopes. Sites.ReadWrite.All is the simplest path and needs
 // admin consent; an admin can later scope this to Sites.Selected if desired.
 export const graphScopes = ["User.Read", "Sites.ReadWrite.All"];

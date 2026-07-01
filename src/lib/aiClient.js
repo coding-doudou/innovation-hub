@@ -7,10 +7,21 @@
 // To move to a shared key later, point baseUrl at a server-side proxy that
 // injects the key and leave the client key blank.
 
+import { aiProxyUrl, aiDefaultModel } from "../config.js";
+
 export const vibeHosts = {
   nonprod: "https://vibe-proxy.westeurope.dev.maersk.io",
   prod: "https://vibe-proxy.westeurope.prod.maersk.io",
 };
+
+// When a server-side proxy is configured (deployed build), the browser calls it
+// instead of the gateway directly and never holds a key.
+export const proxyMode = Boolean(aiProxyUrl);
+
+// Model to send: user override in Settings, else the deployment default.
+export function resolvedModel(cfg) {
+  return (cfg.model || "").trim() || aiDefaultModel || "";
+}
 
 const STORE_KEY = "iph_ai_config";
 const DEFAULTS = { apiKey: "", env: "nonprod", model: "", baseUrl: "" };
@@ -42,31 +53,34 @@ export function resolvedBaseUrl(cfg) {
 }
 
 export function isAiConfigured(cfg) {
-  return Boolean((cfg.apiKey || "").trim() && (cfg.model || "").trim());
+  // In proxy mode the server holds the key; we only need a model to call.
+  if (proxyMode) return Boolean(resolvedModel(cfg));
+  return Boolean((cfg.apiKey || "").trim() && resolvedModel(cfg));
 }
 
 // Low-level call. Returns the full assistant message ({ role, content, tool_calls }).
+// In proxy mode, posts to the server proxy (no key in the browser); otherwise
+// calls the gateway directly with the browser-held key.
 export async function createCompletion({ apiKey, model, baseUrl, messages, tools, temperature = 0.2, signal }) {
-  const url = `${baseUrl}/chat/completions`;
   const body = { model, messages, temperature };
   if (tools && tools.length) {
     body.tools = tools;
     body.tool_choice = "auto";
   }
+  const url = proxyMode ? aiProxyUrl : `${baseUrl}/chat/completions`;
+  const headers = { "Content-Type": "application/json" };
+  if (!proxyMode) headers.Authorization = `Bearer ${apiKey}`;
   let res;
   try {
     res = await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers,
       body: JSON.stringify(body),
       signal,
     });
   } catch (err) {
     throw new Error(
-      `Could not reach ${url}. This is usually a CORS or network issue — the proxy may not allow browser requests from this site. (${err instanceof Error ? err.message : String(err)})`
+      `Could not reach ${url}. ${proxyMode ? "The server proxy may be down." : "This is usually a CORS or network issue — the gateway may not allow browser requests from this site."} (${err instanceof Error ? err.message : String(err)})`
     );
   }
   if (!res.ok) {

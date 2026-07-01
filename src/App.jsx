@@ -35,7 +35,7 @@ import {
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip } from "recharts";
 import { repository } from "./data/repository.js";
 import { putDoc, getDoc, deleteDoc } from "./lib/docStore.js";
-import { loadAiConfig, saveAiConfig, resolvedBaseUrl, isAiConfigured, chatComplete, createCompletion, vibeHosts } from "./lib/aiClient.js";
+import { loadAiConfig, saveAiConfig, resolvedBaseUrl, resolvedModel, isAiConfigured, chatComplete, createCompletion, proxyMode, vibeHosts } from "./lib/aiClient.js";
 import { isRemoteBackend } from "./config.js";
 import { initAuth, login, logout, getActiveAccount } from "./auth/msalClient.js";
 import {
@@ -2750,7 +2750,7 @@ function AiSettingsCard() {
     try {
       const reply = await chatComplete({
         apiKey: cfg.apiKey,
-        model: cfg.model,
+        model: resolvedModel(cfg),
         baseUrl: resolvedBaseUrl(cfg),
         messages: [{ role: "user", content: "Reply with the single word: pong" }],
       });
@@ -2766,31 +2766,41 @@ function AiSettingsCard() {
         <Bot size={18} className="text-brand-600" />
         <h3 className="text-lg font-semibold text-slate-900">AI assistant (Vibe Gateway)</h3>
       </div>
-      <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-        Connect Maersk's MIDAS AI Vibe Gateway to power the AI workspace with real answers grounded in your portfolio. Provision a key with <span className="font-medium text-slate-700">vibecli</span>, then paste it here. The key is stored only in this browser and sent directly to the gateway.
-      </p>
+      {proxyMode ? (
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+          This deployment is connected to the Vibe Gateway through a secure server-side proxy — the key is held by the backend, not in your browser. Optionally override the model below; otherwise the deployment default is used.
+        </p>
+      ) : (
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+          Connect Maersk's MIDAS AI Vibe Gateway to power the AI workspace with real answers grounded in your portfolio. Provision a key with <span className="font-medium text-slate-700">vibecli</span>, then paste it here. The key is stored only in this browser and sent directly to the gateway.
+        </p>
+      )}
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <Field label="Environment">
-          <Select value={cfg.env} onChange={(e) => set("env", e.target.value)} options={["nonprod", "prod"]} />
+        <Field label={proxyMode ? "Model (optional override)" : "Model"}>
+          <Input value={cfg.model} onChange={(e) => set("model", e.target.value)} placeholder="e.g. claude-3-sonnet or a model from your collection" />
         </Field>
-        <Field label="Model">
-          <Input value={cfg.model} onChange={(e) => set("model", e.target.value)} placeholder="e.g. gpt-4o or a model from your collection" />
-        </Field>
-        <Field label="API key" wide>
-          <Input type="password" value={cfg.apiKey} onChange={(e) => set("apiKey", e.target.value)} placeholder="sk-… (from vibecli)" />
-        </Field>
-        <Field label="Base URL override (optional)" wide>
-          <Input value={cfg.baseUrl} onChange={(e) => set("baseUrl", e.target.value)} placeholder={`${vibeHosts[cfg.env] || vibeHosts.nonprod} (use the 'url' from your Vault secret)`} />
-        </Field>
+        {!proxyMode && (
+          <>
+            <Field label="Environment">
+              <Select value={cfg.env} onChange={(e) => set("env", e.target.value)} options={["nonprod", "prod"]} />
+            </Field>
+            <Field label="API key" wide>
+              <Input type="password" value={cfg.apiKey} onChange={(e) => set("apiKey", e.target.value)} placeholder="sk-… (from vibecli)" />
+            </Field>
+            <Field label="Base URL override (optional)" wide>
+              <Input value={cfg.baseUrl} onChange={(e) => set("baseUrl", e.target.value)} placeholder={`${vibeHosts[cfg.env] || vibeHosts.nonprod} (use the 'url' from your Vault secret)`} />
+            </Field>
+          </>
+        )}
       </div>
-      <p className="mt-2 text-xs text-slate-400">Resolved endpoint: {resolvedBaseUrl(cfg)}/chat/completions</p>
+      {!proxyMode && <p className="mt-2 text-xs text-slate-400">Resolved endpoint: {resolvedBaseUrl(cfg)}/chat/completions</p>}
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button onClick={save}>Save</Button>
         <Button variant="secondary" onClick={test} disabled={!configured || status.state === "testing"}>
           <RefreshCw size={16} className={status.state === "testing" ? "animate-spin" : ""} />
           {status.state === "testing" ? "Testing…" : "Test connection"}
         </Button>
-        {!configured && <span className="text-xs text-slate-400">Enter a model and API key to test.</span>}
+        {!configured && <span className="text-xs text-slate-400">{proxyMode ? "Set a model to test." : "Enter a model and API key to test."}</span>}
       </div>
       {status.msg && (
         <div className={cx("mt-4 rounded-xl px-4 py-2.5 text-sm", status.state === "error" ? "bg-rose-50 text-rose-700" : status.state === "ok" ? "bg-emerald-50 text-emerald-700" : "bg-slate-50 text-slate-600")}>
@@ -3413,7 +3423,7 @@ export default function App() {
     setAgentBusy(true);
     try {
       for (let step = 0; step < 6; step += 1) {
-        const message = await createCompletion({ apiKey: cfg.apiKey, model: cfg.model, baseUrl: resolvedBaseUrl(cfg), messages: convo, tools: AGENT_TOOLS });
+        const message = await createCompletion({ apiKey: cfg.apiKey, model: resolvedModel(cfg), baseUrl: resolvedBaseUrl(cfg), messages: convo, tools: AGENT_TOOLS });
         const toolCalls = message.tool_calls || [];
         convo.push({ role: "assistant", content: message.content || "", tool_calls: toolCalls.length ? toolCalls : undefined });
         if (!toolCalls.length) {
