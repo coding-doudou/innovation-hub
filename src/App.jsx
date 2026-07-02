@@ -399,7 +399,7 @@ const sampleProjects = [
     owner: "Doudou BA",
     dateRequested: "2026-06-12",
     businessFunction: "Retail Compliance / WMS Engineering",
-    stakeholderName: "Russ Shadoff, Jacob Pazitka, Yujie Su, Scott Fairley",
+    stakeholderName: "Innovation: Yujie Su, Doudou Ba · Product: Fred Gilbert, Russ Shadoff · TCO: Manny Pappaterra, Jacob Pazitka (+ node heads) · Tech: Hari Naik, Shubhonkor Choudhury, Suman Gosh · Ops: Jose Ovadia, Dennis Hunter (+ regional/site leads) · Finance: Kyle Jung",
     regionScope: "USA / NAM (Maersk Contract Logistics)",
     stage: "POC",
     status: "Amber",
@@ -421,7 +421,7 @@ const sampleProjects = [
     selectedVendor: "RetailReady AI",
     value: "Faster, more efficient retail compliance implementation; transparent compliant labels for site ops; productivity, training, and chargeback-savings gains; and a reusable compliance engine for Maersk.",
     blockers: "Pending internal sign-offs and contractual alignment; POC start date not locked (waiting on Russ's return); retailer/merchant test pairs not yet identified.",
-    notes: "Vendor: RetailReady AI (retailreadyai.com, Y Combinator) — Elle Smyth, Co-Founder/CEO. MNDA signed 15 Jun 2026. POC doc + pricing prepared with Russ Shadoff. Stakeholder groups to win over: TCO/Implementation, site ops users, site ops leadership, MCL leadership. Russ's proposed 30-min slots (EST) for the alignment call: Tue 23 Jun 1:30/3:00/4:30; Wed 24 Jun 9:30/2:30/3:30/4:00/4:30; Thu 25 Jun 2:00-4:30; Fri 26 Jun 9:30/10:00/10:30/2:30/4:00. Source: Maersk / RR POC kickoff email thread (Jun 2026).",
+    notes: "Vendor: RetailReady AI (retailreadyai.com, Y Combinator) — Elle Smyth, Co-Founder/CEO. MNDA signed 15 Jun 2026. POC doc + pricing prepared with Russ Shadoff. Stakeholder groups to win over: TCO/Implementation, site ops users, site ops leadership, MCL leadership. Russ's proposed 30-min slots (EST) for the alignment call: Tue 23 Jun 1:30/3:00/4:30; Wed 24 Jun 9:30/2:30/3:30/4:00/4:30; Thu 25 Jun 2:00-4:30; Fri 26 Jun 9:30/10:00/10:30/2:30/4:00. Source: Maersk / RR POC kickoff email thread (Jun 2026).\n\nStakeholders:\nInnovation (POC management): Yujie Su (Head of Innovation), Doudou Ba (Operations Research Scientist).\nProduct (business sponsor): Fred Gilbert (Head of NAM MCL Product Strategy & Growth Enablement), Russ Shadoff (Head of NAM MCL Strategy).\nTCO (Technical Customer Operations): Manny Pappaterra (Region Head of TCO NAM MCL); Division/Node heads: Jorge Meija, Igor Bukhshteyn, Ana Marchionni; Jacob Pazitka (Sr. WMS Engineer).\nTech (MCL): Hari Naik (Sr. Director MCL Tech), Shubhonkor Choudhury (Sr. Engineer, SCALE WMS), Suman Gosh (Lead Software Engineer, SCALE WMS).\nOperations (MCL): Jose Ovadia (Regional Head of NAM MCL Operations), Dennis Hunter (Head of Operations Strategy, Implementation & Execution); Regional leaders: Steve Belardi (Inland Empire), Wes Clark (Northeast), Lance Mielke (Southeast); Site directors: Patrick Coonan (Burlington), Jimmy Ha (Redlands).\nFinance: Kyle Jung (Sr. Finance Business Partner), Site Finance Manager (TBD).",
     pocHypothesis: "A single RetailReady API call per container can return a retailer-compliant ZPL label with no custom template maintenance, reusing the existing Amazon FBM integration pattern for minimal Maersk dev lift — while a detailed non-printing value proposition (compliance partnership, chargeback dispute, site-ops portal/guides) makes the case for a broader, sustainable partnership.",
     pocSuccessCriteria: [
       { id: "rr-c1", text: "MNDA signed", met: true },
