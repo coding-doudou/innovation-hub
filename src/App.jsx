@@ -1449,7 +1449,55 @@ function DecisionForm({ decision, projects, onSave, onClose }) {
   );
 }
 
-function Overview({ projects, decisions, onOpenProject, onSetView }) {
+function AiBriefingCard({ enabled, onGenerate, onSetView }) {
+  const [state, setState] = useState({ status: "idle", text: "", error: "", at: null });
+
+  const run = async () => {
+    setState((s) => ({ ...s, status: "loading", error: "" }));
+    try {
+      const text = await onGenerate();
+      setState({ status: "done", text, error: "", at: new Date() });
+    } catch (error) {
+      setState((s) => ({ ...s, status: s.text ? "done" : "idle", error: error instanceof Error ? error.message : String(error) }));
+    }
+  };
+
+  return (
+    <Card className="border-brand-100 bg-gradient-to-br from-brand-50/70 to-white p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-gradient text-white shadow-brand-sm">
+            <Sparkles size={19} />
+          </div>
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">AI briefing</h3>
+            <p className="text-xs text-slate-500">
+              {state.at ? `Generated ${state.at.toLocaleTimeString()} from live portfolio data.` : "A leadership-ready read on risks, momentum, and decisions — from live portfolio data."}
+            </p>
+          </div>
+        </div>
+        {enabled ? (
+          <Button variant={state.text ? "secondary" : "primary"} onClick={run} disabled={state.status === "loading"}>
+            <RefreshCw size={15} className={state.status === "loading" ? "animate-spin" : ""} />
+            {state.status === "loading" ? "Generating…" : state.text ? "Refresh" : "Generate briefing"}
+          </Button>
+        ) : (
+          <Button variant="secondary" onClick={() => onSetView("Settings")}>
+            <Sparkles size={15} /> Set up AI to enable
+          </Button>
+        )}
+      </div>
+      {state.error && <p className="mt-3 rounded-xl bg-rose-50 px-4 py-2.5 text-sm text-rose-700">{state.error}</p>}
+      {state.text && (
+        <div className="mt-4 rounded-2xl border border-brand-100/70 bg-white px-5 py-4">
+          <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">{renderRichText(state.text)}</p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function Overview({ projects, decisions, onOpenProject, onSetView, aiEnabled, onGenerateBriefing }) {
   const openDecisions = decisions.filter((decision) => decision.status !== "Closed");
   const [showAllProjects, setShowAllProjects] = useState(false);
 
@@ -1491,6 +1539,8 @@ function Overview({ projects, decisions, onOpenProject, onSetView }) {
         <MetricCard title="At risk" value={projects.filter((project) => ["Red", "Blocked"].includes(project.status)).length} helper="Red or blocked items" icon={AlertTriangle} />
         <MetricCard title="Completed" value={projects.filter((project) => project.status === "Completed").length} helper="Delivered or closed" icon={CheckCircle2} />
       </div>
+
+      <AiBriefingCard enabled={aiEnabled} onGenerate={onGenerateBriefing} onSetView={onSetView} />
 
       <Card className="p-5">
         <div className="flex items-start justify-between gap-3">
@@ -2586,11 +2636,11 @@ function AgentActionRow({ message }) {
 function AgentView({ messages, draft, busy, aiEnabled, onDraftChange, onSubmit, onRunSuggestion, onOpenSettings }) {
   const suggestions = [
     "What's most at risk and why?",
-    "Create a project 'Vendor risk scoring', owner me, stage Scouting",
-    "Mark Ranger AI as Amber and add a task to chase the NDA by Friday",
-    "Advance Network Optimization AI to the next stage",
     "Paste an email and turn it into a project",
-    "Summarize the portfolio",
+    "Read the documents on AI POA Vetting and summarize them",
+    "Mark the NDA task on Ranger AI as done",
+    "Close the leadership pilot decision — approved",
+    "Create a project 'Vendor risk scoring', owner me, stage Scouting",
   ];
 
   const scrollRef = useRef(null);
@@ -3021,10 +3071,14 @@ const AGENT_TOOLS = [
   { type: "function", function: { name: "add_task", description: "Add a task / checklist item to a project.", parameters: { type: "object", properties: { project_name: { type: "string" }, title: { type: "string" }, due: { type: "string", description: "YYYY-MM-DD" }, owner: { type: "string" } }, required: ["project_name", "title"] } } },
   { type: "function", function: { name: "add_decision", description: "Log a decision that needs to be made for a project.", parameters: { type: "object", properties: { project_name: { type: "string" }, decision: { type: "string" }, owner: { type: "string" }, due: { type: "string", description: "YYYY-MM-DD" } }, required: ["project_name", "decision"] } } },
   { type: "function", function: { name: "open_project", description: "Open a project's detail view in the UI for the user.", parameters: { type: "object", properties: { project_name: { type: "string" } }, required: ["project_name"] } } },
+  { type: "function", function: { name: "read_document", description: "Read the content of a document uploaded to a project (text-based files). Use it to answer questions from documents or to fill project fields with their content.", parameters: { type: "object", properties: { project_name: { type: "string" }, document_name: { type: "string", description: "Full or partial file name." } }, required: ["project_name", "document_name"] } } },
+  { type: "function", function: { name: "complete_task", description: "Mark a project task as done (or reopen it with done=false). Match the task by a fragment of its title.", parameters: { type: "object", properties: { project_name: { type: "string" }, task_query: { type: "string", description: "Fragment of the task title." }, done: { type: "boolean", description: "true = done (default), false = reopen." } }, required: ["project_name", "task_query"] } } },
+  { type: "function", function: { name: "close_decision", description: "Close an open decision, optionally recording the final outcome.", parameters: { type: "object", properties: { project_name: { type: "string" }, decision_query: { type: "string", description: "Fragment of the decision text." }, final_decision: { type: "string", description: "The outcome, e.g. 'Approved'." } }, required: ["decision_query"] } } },
+  { type: "function", function: { name: "set_poc_outcome", description: "Record a PoC outcome for a project, optionally with learnings.", parameters: { type: "object", properties: { project_name: { type: "string" }, outcome: { type: "string", enum: pocOutcomes }, learnings: { type: "string" } }, required: ["project_name", "outcome"] } } },
 ];
 
 const AGENT_SYSTEM_PROMPT =
-  "You are the Innovation Brain assistant for Maersk's Innovation team — a centralized knowledge base and team brain for the project portfolio. You can take real actions with the provided tools: create, update, and advance projects; add tasks; log decisions; and open a project in the UI. When the user asks you to do something, DO it with the tools, then confirm what you did in one or two concise sentences. When the user pastes raw material (an email thread, brief, or notes), turn it into a well-structured project: infer a clear name, owner, stakeholders, problem, impact, objectives, next milestone, dates, and vendor, and fill those fields via create_project or update_project — don't just summarize. If you are unsure of an exact project name, call find_projects first. Use ISO dates (YYYY-MM-DD). Only claim a change after the tool reports success; if a tool returns an error, explain it briefly. For pure questions, answer from the portfolio context without calling tools.";
+  "You are the Innovation Brain assistant for Maersk's Innovation team — a centralized knowledge base and team brain for the project portfolio. You can take real actions with the provided tools: create, update, and advance projects; add and complete tasks; log and close decisions; set PoC outcomes; read documents uploaded to projects; and open a project in the UI. When the user asks you to do something, DO it with the tools, then confirm what you did in one or two concise sentences. When the user pastes raw material (an email thread, brief, or notes), turn it into a well-structured project: infer a clear name, owner, stakeholders, problem, impact, objectives, next milestone, dates, and vendor, and fill those fields via create_project or update_project — don't just summarize. When a question likely depends on an uploaded file (docs are listed per project in the context), call read_document before answering. If you are unsure of an exact project name, call find_projects first. Use ISO dates (YYYY-MM-DD). Only claim a change after the tool reports success; if a tool returns an error, explain it briefly. For pure questions, answer from the portfolio context without calling tools.";
 
 export default function App() {
   const [view, setView] = useState("Portfolio");
@@ -3278,9 +3332,11 @@ export default function App() {
   };
 
   const buildPortfolioContext = () => {
-    const projectLines = projects.map(
-      (p) => `- ${p.name} | ${p.productArea} | stage: ${p.stage} | status: ${p.status} | priority: ${p.priority} | owner: ${p.owner || "?"} | target: ${p.targetDate || "n/a"} | next: ${p.nextMilestone || "n/a"}`
-    );
+    const projectLines = projects.map((p) => {
+      const openTasks = (p.tasks || []).filter((t) => !t.done).length;
+      const docs = (p.documents || []).map((d) => d.name).join("; ");
+      return `- ${p.name} | ${p.productArea} | stage: ${p.stage} | status: ${p.status} | priority: ${p.priority} | owner: ${p.owner || "?"} | target: ${p.targetDate || "n/a"} | next: ${p.nextMilestone || "n/a"}${openTasks ? ` | open tasks: ${openTasks}` : ""}${docs ? ` | docs: ${docs}` : ""}`;
+    });
     const openDecisions = decisions
       .filter((d) => d.status !== "Closed")
       .map((d) => `- ${d.decision} (${d.project}) due ${d.due || "n/a"}`);
@@ -3291,6 +3347,24 @@ export default function App() {
       `Open decisions — ${openDecisions.length}:`,
       openDecisions.join("\n") || "- none",
     ].join("\n");
+  };
+
+  // One-shot executive briefing over the live portfolio (Portfolio view).
+  const generateBriefing = async () => {
+    const cfg = loadAiConfig();
+    return chatComplete({
+      apiKey: cfg.apiKey,
+      model: resolvedModel(cfg),
+      baseUrl: resolvedBaseUrl(cfg),
+      messages: [
+        {
+          role: "system",
+          content:
+            "You write crisp executive briefings for Maersk's Innovation portfolio. Structure: **Headline** (one sentence on overall state), **Momentum** (what moved), **At risk** (specific projects and why), **Decisions needed** (who must decide what), **Next two weeks** (concrete actions). Use hyphen bullets under each bold header, name real projects and owners, stay under 220 words, no preamble.",
+        },
+        { role: "user", content: `Write today's briefing from this live portfolio data.\n\n${buildPortfolioContext()}` },
+      ],
+    });
   };
 
   // Agentic turn: the model plans and calls app tools in a loop until the task
@@ -3312,6 +3386,11 @@ export default function App() {
       liveDecisions = [next, ...liveDecisions];
       setDecisions((current) => [next, ...current]);
       persistDecision(next, true);
+    };
+    const commitDecisionUpdate = (next) => {
+      liveDecisions = liveDecisions.map((d) => (d.id === next.id ? next : d));
+      setDecisions((current) => current.map((d) => (d.id === next.id ? next : d)));
+      persistDecision(next, false);
     };
 
     const executeTool = async (name, args) => {
@@ -3404,6 +3483,58 @@ export default function App() {
           commitDecision(next);
           return `Logged decision for ${found.name}: "${args.decision}".`;
         }
+        if (name === "read_document") {
+          const found = findP(args.project_name);
+          if (!found) return `No project matches "${args.project_name}".`;
+          const cur = liveProjects.find((x) => x.id === found.id);
+          const docs = cur.documents || [];
+          const q = String(args.document_name || "").toLowerCase();
+          const doc = docs.find((d) => d.name.toLowerCase() === q) || docs.find((d) => d.name.toLowerCase().includes(q));
+          if (!doc) return `No document named "${args.document_name}" on ${cur.name}. Available: ${docs.map((d) => d.name).join(", ") || "none"}.`;
+          const blob = await getDoc(doc.id);
+          if (!blob) return `"${doc.name}" was uploaded in another browser; its content isn't stored here.`;
+          const ext = (doc.name.split(".").pop() || "").toLowerCase();
+          const textLike = (blob.type || "").startsWith("text/") || /json|csv|xml/.test(blob.type || "") || ["txt", "md", "csv", "json", "log", "eml"].includes(ext);
+          if (!textLike) return `"${doc.name}" is a ${ext || "binary"} file (${formatBytes(doc.size)}); content extraction for binary formats isn't supported yet — ask the user to paste the key content instead.`;
+          const text = await blob.text();
+          return `Content of "${doc.name}" (${text.length} chars${text.length > 12000 ? ", truncated to 12000" : ""}):\n\n${text.slice(0, 12000)}`;
+        }
+        if (name === "complete_task") {
+          const found = findP(args.project_name);
+          if (!found) return `No project matches "${args.project_name}".`;
+          const cur = liveProjects.find((x) => x.id === found.id);
+          const q = String(args.task_query || "").toLowerCase();
+          const task = (cur.tasks || []).find((t) => t.title.toLowerCase().includes(q));
+          if (!task) return `No task matching "${args.task_query}" on ${cur.name}. Tasks: ${(cur.tasks || []).map((t) => t.title).join("; ") || "none"}.`;
+          const done = args.done !== false;
+          if (Boolean(task.done) === done) return `Task "${task.title}" is already ${done ? "done" : "open"}.`;
+          const tasks = (cur.tasks || []).map((t) => (t.id === task.id ? { ...t, done } : t));
+          const updated = { ...cur, tasks, updatedAt: new Date().toISOString(), activity: [createActivityEntry("agent", `Task ${done ? "completed" : "reopened"} via AI: ${task.title}`), ...(cur.activity || [])].slice(0, 30) };
+          commitProject(updated, false);
+          return `${done ? "Completed" : "Reopened"} task on ${cur.name}: "${task.title}".`;
+        }
+        if (name === "close_decision") {
+          const q = String(args.decision_query || "").toLowerCase();
+          let scope = liveDecisions;
+          if (args.project_name) {
+            const p = findP(args.project_name);
+            if (p) scope = liveDecisions.filter((d) => d.project === p.name);
+          }
+          const dec = scope.find((d) => d.status !== "Closed" && String(d.decision).toLowerCase().includes(q));
+          if (!dec) return `No open decision matching "${args.decision_query}".`;
+          const next = { ...dec, status: "Closed", finalDecision: args.final_decision || dec.finalDecision || "Closed", updatedAt: new Date().toISOString() };
+          commitDecisionUpdate(next);
+          return `Closed decision "${dec.decision}" (${dec.project})${args.final_decision ? ` — outcome: ${args.final_decision}` : ""}.`;
+        }
+        if (name === "set_poc_outcome") {
+          const found = findP(args.project_name);
+          if (!found) return `No project matches "${args.project_name}".`;
+          if (!pocOutcomes.includes(args.outcome)) return `outcome must be one of: ${pocOutcomes.join(", ")}.`;
+          const cur = liveProjects.find((x) => x.id === found.id);
+          const updated = { ...cur, pocOutcome: args.outcome, ...(args.learnings ? { pocLearnings: args.learnings } : {}), updatedAt: new Date().toISOString(), activity: [createActivityEntry("agent", `PoC outcome set to ${args.outcome} via AI.`), ...(cur.activity || [])].slice(0, 30) };
+          commitProject(updated, false);
+          return `Set PoC outcome for ${cur.name} to ${args.outcome}${args.learnings ? " and recorded learnings" : ""}.`;
+        }
         return `Unknown tool: ${name}.`;
       } catch (error) {
         return `Error running ${name}: ${error instanceof Error ? error.message : String(error)}`;
@@ -3420,8 +3551,8 @@ export default function App() {
       { role: "user", content: input },
     ];
 
-    const isToolError = (text) => /(is required\.| already exists\.|must be one of|must be in YYYY|No recognized fields|^No project matches|^Cannot advance|already at the final stage|^Unknown tool|^Error running)/.test(text);
-    const actionLabel = (toolName) => ({ create_project: "Created project", update_project: "Updated project", advance_project: "Advanced stage", add_task: "Added task", add_decision: "Logged decision", open_project: "Opened project", find_projects: "Looked up projects" }[toolName] || toolName);
+    const isToolError = (text) => /(is required\.| already exists\.|must be one of|must be in YYYY|No recognized fields|^No project matches|^No document named|^No task matching|^No open decision|isn't stored here|isn't supported yet|is already |^Cannot advance|already at the final stage|^Unknown tool|^Error running)/.test(text);
+    const actionLabel = (toolName) => ({ create_project: "Created project", update_project: "Updated project", advance_project: "Advanced stage", add_task: "Added task", add_decision: "Logged decision", open_project: "Opened project", find_projects: "Looked up projects", read_document: "Read document", complete_task: "Completed task", close_decision: "Closed decision", set_poc_outcome: "Set PoC outcome" }[toolName] || toolName);
 
     setAgentBusy(true);
     try {
@@ -3438,7 +3569,7 @@ export default function App() {
           try { parsed = JSON.parse(call.function?.arguments || "{}"); } catch { parsed = {}; }
           const toolName = call.function?.name;
           const result = await executeTool(toolName, parsed);
-          const isRead = toolName === "find_projects";
+          const isRead = toolName === "find_projects" || (toolName === "read_document" && !isToolError(result));
           appendAgentAction(actionLabel(toolName), isRead ? "" : result, isRead ? "neutral" : isToolError(result) ? "error" : "ok");
           convo.push({ role: "tool", tool_call_id: call.id, content: result });
         }
@@ -4037,7 +4168,14 @@ export default function App() {
           <div key={view} className="animate-fade-in">
 
         {view === "Portfolio" && (
-          <Overview projects={projects} decisions={decisions} onOpenProject={setSelectedProject} onSetView={setView} />
+          <Overview
+            projects={projects}
+            decisions={decisions}
+            onOpenProject={setSelectedProject}
+            onSetView={setView}
+            aiEnabled={isAiConfigured(loadAiConfig())}
+            onGenerateBriefing={generateBriefing}
+          />
         )}
 
         {view === "Board" && (
