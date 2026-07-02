@@ -53,6 +53,25 @@ Retrieve the `key` and `url` from the MDP Portal → Secrets tab (or Vault).
    `staticwebapp.config.json` already gates the app and `/api/*` to authenticated
    users and redirects anonymous hits to `/.auth/login/aad`.
 
+## CI/CD (auto-deploy on push)
+
+A workflow at `.github/workflows/deploy-azure-swa.yml` deploys to SWA on every
+push to `main`. It stays **dormant** until you enable it, so it never fails CI
+before Azure exists. To turn it on:
+
+1. In the SWA resource, copy the **deployment token** and add it as a GitHub
+   **secret**: `AZURE_STATIC_WEB_APPS_API_TOKEN`.
+2. Add a GitHub **variable** `AZURE_DEPLOY_ENABLED = true` (and optionally
+   `VITE_AI_MODEL`, `VITE_AAD_*`, `VITE_SP_*`).
+3. Push to `main` → it builds the SPA (proxy mode) + the `api` and deploys.
+
+The runtime secrets — `VIBE_API_KEY`, `VIBE_BASE_URL`, and the Entra auth
+`AAD_CLIENT_ID` / `AAD_CLIENT_SECRET` / `AAD_TENANT_ID` — are **SWA app settings**
+set in the Azure portal, not GitHub (they must never be in the build/bundle).
+
+> Note: GitHub Pages (`deploy-pages.yml`) keeps working independently. Once the
+> Azure SWA is the real home, you can retire the Pages workflow.
+
 ### Network note (important)
 
 If `vibe-proxy` is only reachable **inside** the Maersk network, the SWA managed
