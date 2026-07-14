@@ -31,6 +31,7 @@ import {
   Trash2,
   Upload,
   User,
+  X,
 } from "lucide-react";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip } from "recharts";
 import { repository } from "./data/repository.js";
@@ -1451,6 +1452,30 @@ function DecisionForm({ decision, projects, onSave, onClose }) {
         </div>
       </form>
     </Modal>
+  );
+}
+
+function Toaster({ toasts, onDismiss }) {
+  if (!toasts.length) return null;
+  const tones = {
+    success: { icon: CheckCircle2, ring: "ring-emerald-200", bar: "bg-emerald-500", text: "text-emerald-600" },
+    error: { icon: AlertTriangle, ring: "ring-rose-200", bar: "bg-rose-500", text: "text-rose-600" },
+    info: { icon: Sparkles, ring: "ring-brand-200", bar: "bg-brand-500", text: "text-brand-600" },
+  };
+  return (
+    <div className="fixed bottom-5 right-5 z-[100] flex w-[calc(100vw-2.5rem)] max-w-sm flex-col gap-2">
+      {toasts.map((toast) => {
+        const tone = tones[toast.tone] || tones.info;
+        const Icon = tone.icon;
+        return (
+          <div key={toast.id} className={cx("animate-fade-in flex items-start gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-card-hover ring-1", tone.ring)}>
+            <span className={cx("mt-0.5 shrink-0", tone.text)}><Icon size={18} /></span>
+            <p className="min-w-0 flex-1 text-sm leading-6 text-slate-700">{toast.message}</p>
+            <button type="button" onClick={() => onDismiss(toast.id)} className="shrink-0 rounded-lg p-0.5 text-slate-300 transition hover:text-slate-600" aria-label="Dismiss"><X size={15} /></button>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -3146,6 +3171,13 @@ export default function App() {
   const [dataStatus, setDataStatus] = useState("loading"); // loading | ready | error
   const [bootError, setBootError] = useState(null);
   const [syncError, setSyncError] = useState(null);
+  const [toasts, setToasts] = useState([]);
+  const pushToast = (message, tone = "success") => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setToasts((current) => [...current, { id, message, tone }]);
+    setTimeout(() => setToasts((current) => current.filter((t) => t.id !== id)), 5000);
+  };
+  const dismissToast = (id) => setToasts((current) => current.filter((t) => t.id !== id));
   const [account, setAccount] = useState(null);
   const [authChecked, setAuthChecked] = useState(!isRemoteBackend);
 
@@ -3722,6 +3754,7 @@ export default function App() {
     setEditingProject(null);
     setSelectedProject(nextProject);
     persistProject(nextProject, !previousProject);
+    pushToast(previousProject ? `Saved “${nextProject.name}”` : `Created “${nextProject.name}”`);
   };
 
   const saveDecision = (decision) => {
@@ -3732,6 +3765,7 @@ export default function App() {
     setShowDecisionForm(false);
     setEditingDecision(null);
     persistDecision(decision, !exists);
+    pushToast(exists ? "Decision updated" : "Decision logged");
   };
 
   const deleteDecision = (decisionId) => {
@@ -3764,7 +3798,7 @@ export default function App() {
       .map(([, label]) => label);
 
     if (missing.length) {
-      window.alert(`Cannot advance ${project.name} yet.\n\nComplete these first:\n- ${missing.join("\n- ")}`);
+      pushToast(`Can't advance “${project.name}” yet — complete: ${missing.join(", ")}`, "error");
       return;
     }
 
@@ -3780,6 +3814,7 @@ export default function App() {
     setProjects((current) => current.map((item) => (item.id === projectId ? updated : item)));
     setSelectedProject((current) => (current && current.id === projectId ? updated : current));
     persistProject(updated, false);
+    pushToast(`“${project.name}” advanced to ${next}`);
   };
 
   const deleteProject = (projectId) => {
@@ -3791,6 +3826,7 @@ export default function App() {
     setSelectedProject(null);
     persistProjectDelete(project);
     relatedDecisions.forEach((decision) => persistDecisionDelete(decision));
+    pushToast(`Deleted “${project.name}”`);
   };
 
   const exportWorkspaceJson = () => {
@@ -3815,8 +3851,9 @@ export default function App() {
       setShowProjectForm(false);
       setShowDecisionForm(false);
       setLastSavedAt(new Date().toISOString());
+      pushToast(`Imported ${next.projects.length} projects and ${next.decisions.length} decisions`);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Unable to import JSON.");
+      pushToast(error instanceof Error ? error.message : "Unable to import JSON.", "error");
     } finally {
       event.target.value = "";
     }
@@ -4306,6 +4343,8 @@ export default function App() {
           onClose={() => { setShowDecisionForm(false); setEditingDecision(null); }}
         />
       )}
+
+      <Toaster toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }
