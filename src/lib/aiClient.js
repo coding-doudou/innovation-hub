@@ -1,5 +1,5 @@
-// Vibe Gateway (MIDAS AI) client. The gateway is OpenAI-compatible (LiteLLM
-// proxy), so we talk to it with a standard /chat/completions call.
+// OpenAI-compatible client for local Ollama/vLLM and the MIDAS Vibe Gateway.
+// Every provider is accessed through the standard /chat/completions endpoint.
 //
 // The app is a public client-side SPA, so it cannot ship a budget-bound key in
 // the bundle. Instead each user pastes their own Vibe Gateway key in Settings;
@@ -14,6 +14,19 @@ export const vibeHosts = {
   prod: "https://vibe-proxy.westeurope.prod.maersk.io",
 };
 
+export const localAiPresets = {
+  ollama: {
+    label: "Ollama",
+    baseUrl: "http://127.0.0.1:11434/v1",
+    model: "qwen3:4b",
+  },
+  vllm: {
+    label: "vLLM",
+    baseUrl: "http://127.0.0.1:8000/v1",
+    model: "OctOpus3_30B_A3B",
+  },
+};
+
 // When a server-side proxy is configured (deployed build), the browser calls it
 // instead of the gateway directly and never holds a key.
 export const proxyMode = Boolean(aiProxyUrl);
@@ -24,7 +37,23 @@ export function resolvedModel(cfg) {
 }
 
 const STORE_KEY = "iph_ai_config";
-const DEFAULTS = { apiKey: "", env: "nonprod", model: "", baseUrl: "" };
+const isLocalApp =
+  typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname);
+const DEFAULTS = {
+  apiKey: "",
+  env: "nonprod",
+  model: isLocalApp ? localAiPresets.ollama.model : "",
+  baseUrl: isLocalApp ? localAiPresets.ollama.baseUrl : "",
+};
+
+export function isLocalAiUrl(baseUrl) {
+  try {
+    const { hostname } = new URL(baseUrl);
+    return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(hostname);
+  } catch {
+    return false;
+  }
+}
 
 export function loadAiConfig() {
   try {
@@ -55,7 +84,8 @@ export function resolvedBaseUrl(cfg) {
 export function isAiConfigured(cfg) {
   // In proxy mode the server holds the key; we only need a model to call.
   if (proxyMode) return Boolean(resolvedModel(cfg));
-  return Boolean((cfg.apiKey || "").trim() && resolvedModel(cfg));
+  const baseUrl = resolvedBaseUrl(cfg);
+  return Boolean(resolvedModel(cfg) && ((cfg.apiKey || "").trim() || isLocalAiUrl(baseUrl)));
 }
 
 // Low-level call. Returns the full assistant message ({ role, content, tool_calls }).
@@ -69,7 +99,7 @@ export async function createCompletion({ apiKey, model, baseUrl, messages, tools
   }
   const url = proxyMode ? aiProxyUrl : `${baseUrl}/chat/completions`;
   const headers = { "Content-Type": "application/json" };
-  if (!proxyMode) headers.Authorization = `Bearer ${apiKey}`;
+  if (!proxyMode && apiKey) headers.Authorization = `Bearer ${apiKey}`;
   let res;
   try {
     res = await fetch(url, {
@@ -91,11 +121,11 @@ export async function createCompletion({ apiKey, model, baseUrl, messages, tools
     } catch {
       detail = await res.text().catch(() => "");
     }
-    throw new Error(`Gateway returned ${res.status}. ${String(detail).slice(0, 400)}`);
+    throw new Error(`AI endpoint returned ${res.status}. ${String(detail).slice(0, 400)}`);
   }
   const data = await res.json();
   const message = data?.choices?.[0]?.message;
-  if (!message) throw new Error("Gateway returned no message.");
+  if (!message) throw new Error("AI endpoint returned no message.");
   return message;
 }
 
@@ -103,6 +133,6 @@ export async function createCompletion({ apiKey, model, baseUrl, messages, tools
 export async function chatComplete(opts) {
   const message = await createCompletion(opts);
   const text = message?.content;
-  if (!text) throw new Error("Gateway returned no message content.");
+  if (!text) throw new Error("AI endpoint returned no message content.");
   return String(text).trim();
 }

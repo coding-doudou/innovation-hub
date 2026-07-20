@@ -33,7 +33,7 @@ export function Badge({ children, tone = "default" }) {
 }
 
 export function Card({ className = "", children, ...props }) {
-  return <div className={cx("rounded-2xl border border-slate-200/70 bg-white shadow-card", className)} {...props}>{children}</div>;
+  return <div className={cx("rounded-[1.15rem] border border-slate-200/80 bg-white shadow-card", className)} {...props}>{children}</div>;
 }
 
 export function Button({ children, variant = "primary", className = "", ...props }) {
@@ -91,26 +91,26 @@ export function Modal({ title, subtitle, onClose, children, width = "max-w-3xl",
 
 export function MetricCard({ title, value, helper, icon: Icon, accent = "brand" }) {
   const chips = {
-    brand: "from-brand-500 to-brand-700 shadow-brand-sm",
-    rose: "from-rose-400 to-rose-600 shadow-[0_2px_8px_-1px_rgba(244,63,94,0.4)]",
-    emerald: "from-emerald-400 to-emerald-600 shadow-[0_2px_8px_-1px_rgba(16,185,129,0.4)]",
-    amber: "from-amber-400 to-amber-600 shadow-[0_2px_8px_-1px_rgba(245,158,11,0.4)]",
-    violet: "from-violet-400 to-violet-600 shadow-[0_2px_8px_-1px_rgba(139,92,246,0.4)]",
+    brand: "bg-brand-50 text-brand-700",
+    rose: "bg-rose-50 text-rose-700",
+    emerald: "bg-emerald-50 text-emerald-700",
+    amber: "bg-amber-50 text-amber-700",
+    violet: "bg-violet-50 text-violet-700",
   };
   return (
-    <Card className="group relative overflow-hidden p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-card-hover">
-      <div className="pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full bg-gradient-to-br from-brand-50 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-      <div className="relative flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-slate-500">{title}</p>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900">{value}</p>
-          <p className="mt-1 text-sm text-slate-500">{helper}</p>
-        </div>
-        <div className={cx("rounded-2xl bg-gradient-to-br p-3 text-white", chips[accent] || chips.brand)}>
-          <Icon size={20} />
-        </div>
+    <div className="group flex min-w-0 items-center gap-2.5 px-3 py-4 transition-colors hover:bg-slate-50/80 sm:gap-3 sm:px-5">
+      <div className={cx("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10", chips[accent] || chips.brand)}>
+        <Icon size={18} strokeWidth={1.8} />
       </div>
-    </Card>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-slate-500 sm:text-xs">{title}</p>
+        <div className="mt-0.5 flex items-baseline gap-2">
+          <p className="text-2xl font-bold tracking-[-0.04em] text-slate-950">{value}</p>
+          <p className="hidden truncate text-xs text-slate-500 xl:block">{helper}</p>
+        </div>
+        <p className="truncate text-[11px] text-slate-500 xl:hidden">{helper}</p>
+      </div>
+    </div>
   );
 }
 
