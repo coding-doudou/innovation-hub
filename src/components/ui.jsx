@@ -127,12 +127,15 @@ export function EmptyState({ title, text, action }) {
   );
 }
 
-export function StagePanel({ title, description, children }) {
+export function StagePanel({ title, description, action, children }) {
   return (
     <Card className="border-slate-150 bg-white p-6">
-      <div className="mb-4">
-        <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-        {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+          {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+        </div>
+        {action}
       </div>
       {children}
     </Card>
@@ -180,7 +183,7 @@ export function MiniTable({ columns, rows, emptyText = "No records." }) {
   );
 }
 
-export function EditableTable({ title, description, columns, rows, onChange, createRow }) {
+export function EditableTable({ title, description, action, columns, rows, onChange, createRow }) {
   const updateCell = (rowIndex, key, value) => {
     onChange(rows.map((row, index) => (index === rowIndex ? { ...row, [key]: value } : row)));
   };
@@ -194,7 +197,7 @@ export function EditableTable({ title, description, columns, rows, onChange, cre
   };
 
   return (
-    <StagePanel title={title} description={description}>
+    <StagePanel title={title} description={description} action={action}>
       <div className="space-y-4">
         {rows.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-500">

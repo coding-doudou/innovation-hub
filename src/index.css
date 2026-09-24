@@ -8,8 +8,11 @@ html, body, #root {
 
 body {
   margin: 0;
-  font-family: "Aptos", "Avenir Next", "Segoe UI Variable", sans-serif;
-  font-feature-settings: "ss01", "ss02", "tnum";
+  font-family: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-feature-settings: normal;
+  font-variant: normal;
+  font-synthesis: none;
+  font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: #0B1F3A;

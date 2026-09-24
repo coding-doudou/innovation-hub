@@ -3,9 +3,11 @@ import {
   AlertTriangle,
   BarChart3,
   CalendarDays,
+  Check,
   CheckCircle2,
   ChevronRight,
   CircleDollarSign,
+  Copy,
   Brain,
   ClipboardCheck,
   Download,
@@ -1054,6 +1056,128 @@ function DocumentsCard({ project, onAddDocuments, onRemoveDocument }) {
   );
 }
 
+function VendorCarryForward({ sourceRows = [], targetRows = [], sourceLabel, onImport }) {
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState([]);
+  const rootRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (event) => {
+      if (rootRef.current && !rootRef.current.contains(event.target)) setOpen(false);
+    };
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+  const existing = new Set(targetRows.map((row) => String(row.vendorName || "").trim().toLowerCase()).filter(Boolean));
+  const seen = new Set();
+  const candidates = sourceRows.filter((row) => {
+    const key = String(row.vendorName || "").trim().toLowerCase();
+    if (!key || existing.has(key) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const selectedSet = new Set(selected);
+
+  const toggle = (vendorName) => {
+    setSelected((current) => current.includes(vendorName)
+      ? current.filter((name) => name !== vendorName)
+      : [...current, vendorName]);
+  };
+
+  const importSelected = () => {
+    const chosen = candidates.filter((row) => selectedSet.has(row.vendorName));
+    if (!chosen.length) return;
+    onImport(chosen);
+    setSelected([]);
+    setOpen(false);
+  };
+
+  return (
+    <div ref={rootRef} className="relative">
+      <Button
+        type="button"
+        variant="secondary"
+        disabled={!candidates.length}
+        aria-expanded={open}
+        onClick={() => {
+          setSelected([]);
+          setOpen((current) => !current);
+        }}
+        className="whitespace-nowrap px-3 py-2 text-xs"
+        title={
+          candidates.length
+            ? `Choose vendors from ${sourceLabel}`
+            : sourceRows.length
+              ? `All vendors from ${sourceLabel} are already here`
+              : `Add vendors to the ${sourceLabel} first`
+        }
+      >
+        <Copy size={14} />{" "}
+        {candidates.length
+          ? `Add from ${sourceLabel}`
+          : sourceRows.length
+            ? "All vendors carried forward"
+            : `Nothing in ${sourceLabel} yet`}
+      </Button>
+      {open && candidates.length > 0 && (
+        <div className="absolute right-0 top-full z-30 mt-2 w-[min(22rem,calc(100vw-3rem))] rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl ring-1 ring-slate-900/5">
+          <div className="flex items-center justify-between gap-3 px-1 pb-2">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Carry vendors forward</p>
+              <p className="text-xs text-slate-500">Choose from {sourceLabel}. Existing vendors are skipped.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelected(selected.length === candidates.length ? [] : candidates.map((row) => row.vendorName))}
+              className="shrink-0 whitespace-nowrap text-xs font-semibold text-brand-700 hover:text-brand-800"
+            >
+              {selected.length === candidates.length ? "Clear" : "Select all"}
+            </button>
+          </div>
+          <div className="max-h-64 space-y-1 overflow-y-auto py-1">
+            {candidates.map((vendor) => {
+              const checked = selectedSet.has(vendor.vendorName);
+              return (
+                <button
+                  key={vendor.vendorName}
+                  type="button"
+                  onClick={() => toggle(vendor.vendorName)}
+                  className={cx(
+                    "flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition",
+                    checked ? "border-brand-200 bg-brand-50" : "border-transparent hover:bg-slate-50"
+                  )}
+                >
+                  <span className={cx("mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border", checked ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 bg-white")}>
+                    {checked && <Check size={13} strokeWidth={2.5} />}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-slate-800">{vendor.vendorName}</span>
+                    {(vendor.contactName || vendor.cluster) && <span className="mt-0.5 block truncate text-xs text-slate-500">{vendor.contactName || vendor.cluster}</span>}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-2 flex justify-end gap-2 border-t border-slate-100 pt-3">
+            <Button type="button" variant="ghost" className="px-3 py-2 text-xs" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button type="button" className="px-3 py-2 text-xs" disabled={!selected.length} onClick={importSelected}>
+              {selected.length ? `Add ${selected.length} vendor${selected.length === 1 ? "" : "s"}` : "Add vendors"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProjectForm({ project, onSave, onClose }) {
   const [form, setForm] = useState(project ? { ...emptyProject, ...project } : emptyProject);
   const [activeStageTab, setActiveStageTab] = useState(project?.stage || "Problem Articulation");
@@ -1154,6 +1278,27 @@ function ProjectForm({ project, onSave, onClose }) {
           description="Track the partners moved into outreach and application handling."
           rows={form.selectedVendors}
           onChange={(rows) => set("selectedVendors", rows)}
+          action={
+            <VendorCarryForward
+              sourceRows={form.curatedVendors}
+              targetRows={form.selectedVendors}
+              sourceLabel="curated list"
+              onImport={(vendors) => set("selectedVendors", [
+                ...form.selectedVendors,
+                ...vendors.map((vendor, index) => ({
+                  ...vendor,
+                  number: form.selectedVendors.length + index + 1,
+                  contactEmail: vendor.contactEmail || "",
+                  contactName: vendor.contactName || "",
+                  role: vendor.role || "",
+                  comments: vendor.comments || "",
+                  contactReceived: vendor.contactReceived || "",
+                  formSent: vendor.formSent || "",
+                  formReceived: vendor.formReceived || "",
+                })),
+              ])}
+            />
+          }
           createRow={(index) => ({ number: index + 1, vendorName: "", contactEmail: "", contactName: "", role: "", contactReceived: "", formSent: "", formReceived: "" })}
           columns={[
             { key: "vendorName", label: "Vendor name" },
@@ -1170,9 +1315,33 @@ function ProjectForm({ project, onSave, onClose }) {
           description="Keep the demo shortlist, commercial signal, and key tradeoffs in one place."
           rows={form.demoVendors}
           onChange={(rows) => set("demoVendors", rows)}
-          createRow={(index) => ({ number: index + 1, vendorName: "", demoDate: "", plus: "", minus: "", pocCost: "", deploymentCost: "" })}
+          action={
+            <VendorCarryForward
+              sourceRows={form.selectedVendors}
+              targetRows={form.demoVendors}
+              sourceLabel="outreach shortlist"
+              onImport={(vendors) => set("demoVendors", [
+                ...form.demoVendors,
+                ...vendors.map((vendor, index) => ({
+                  ...vendor,
+                  number: form.demoVendors.length + index + 1,
+                  nda: vendor.nda || "",
+                  demoDate: vendor.demoDate || "",
+                  plus: vendor.plus || "",
+                  minus: vendor.minus || "",
+                  pocCost: vendor.pocCost || "",
+                  deploymentCost: vendor.deploymentCost || "",
+                })),
+              ])}
+            />
+          }
+          createRow={(index) => ({ number: index + 1, vendorName: "", contactName: "", role: "", contactEmail: "", nda: "", demoDate: "", plus: "", minus: "", pocCost: "", deploymentCost: "" })}
           columns={[
             { key: "vendorName", label: "Vendor name" },
+            { key: "contactName", label: "Contact name" },
+            { key: "role", label: "Role" },
+            { key: "contactEmail", label: "Contact email" },
+            { key: "nda", label: "NDA" },
             { key: "demoDate", label: "Demo date" },
             { key: "pocCost", label: "PoC cost" },
             { key: "deploymentCost", label: "Deployment cost" },
@@ -1185,6 +1354,26 @@ function ProjectForm({ project, onSave, onClose }) {
           description="Score the serious candidates so the partner decision is explicit instead of buried in notes."
           rows={form.vendorEvaluations}
           onChange={(rows) => set("vendorEvaluations", rows)}
+          action={
+            <VendorCarryForward
+              sourceRows={form.demoVendors}
+              targetRows={form.vendorEvaluations}
+              sourceLabel="demo shortlist"
+              onImport={(vendors) => set("vendorEvaluations", [
+                ...form.vendorEvaluations,
+                ...vendors.map((vendor) => ({
+                  vendorName: vendor.vendorName,
+                  strategicFit: "",
+                  logisticsFit: "",
+                  integrationFit: "",
+                  securityReadiness: "",
+                  speedToValue: "",
+                  commercialFit: "",
+                  notes: "",
+                })),
+              ])}
+            />
+          }
           createRow={() => ({ vendorName: "", strategicFit: "", logisticsFit: "", integrationFit: "", securityReadiness: "", speedToValue: "", commercialFit: "", notes: "" })}
           columns={[
             { key: "vendorName", label: "Vendor name" },
@@ -2236,6 +2425,9 @@ function ProjectDetail({ project, decisions, onClose, onEdit, onDelete, onAdvanc
             columns={[
               { key: "number", label: "#" },
               { key: "vendorName", label: "Vendor" },
+              { key: "contactName", label: "Contact" },
+              { key: "role", label: "Role" },
+              { key: "nda", label: "NDA" },
               { key: "demoDate", label: "Demo date" },
               { key: "plus", label: "+" },
               { key: "minus", label: "-" },

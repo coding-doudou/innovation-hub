@@ -5,9 +5,10 @@ export default {
     extend: {
       fontFamily: {
         sans: [
-          "Aptos",
-          "Avenir Next",
-          "Segoe UI Variable",
+          "Inter",
+          "Segoe UI",
+          "Helvetica Neue",
+          "Arial",
           "sans-serif",
         ],
       },
